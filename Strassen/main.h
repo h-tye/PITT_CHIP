@@ -110,7 +110,9 @@ void calculate_M1(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *M1, Ma
             sub_matrices_B[i - 1] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
         }
 
-        calculate_intermediates(sub_matrices_A, sub_matrices_B);
+        // Initialize new set of intermediates for recursion
+        Matrix intermediates[7];
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediates, stack);
     }
     else
     {
@@ -176,7 +178,9 @@ void calculate_M2_M5(Matrix A1, Matrix A2, Matrix B11, Matrix *M, MatrixStack *s
             sub_matrices_A[i - 1] = matrix_partition(A_result, A_result.rows / 2, A_result.cols / 2, i);
         }
 
-        calculate_intermediates(sub_matrices_A, sub_matrices_B);
+        // Initialize new set of intermediates for recursion
+        Matrix intermediates[7];
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediates, stack);
     }
     else
     {
@@ -242,7 +246,9 @@ void calculate_M3_M4(Matrix A1, Matrix B1, Matrix B2, Matrix *M, MatrixStack *st
             sub_matrices_A[i - 1] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
         }
 
-        calculate_intermediates(sub_matrices_A, sub_matrices_B);
+        // Initialize new set of intermediates for recursion
+        Matrix intermediates[7];
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediates, stack);
     }
     else
     {
@@ -313,7 +319,9 @@ void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *M, 
             sub_matrices_B[i - 1] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
         }
 
-        calculate_intermediates(sub_matrices_A, sub_matrices_B);
+        // Initialize new set of intermediates for recursion
+        Matrix intermediates[7];
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediates, stack);
     }
     else
     {
@@ -344,22 +352,17 @@ void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *M, 
     }
 }
 
-int calculate_intermediates(Matrix partitioned_matrices_A[4], Matrix partitioned_matrices_B[4])
+int calculate_intermediates(Matrix partitioned_matrices_A[4], Matrix partitioned_matrices_B[4], Matrix *intermediates, MatrixStack *stack)
 {
-    // Define intermediate matrices
-    Matrix intermediates[7]; // Intermediate matrices for Strassen's algorithm, M values
-
-    // Instantiate stack for unproccessed matrices
-    MatrixStack stack;
 
     // Compute
-    calculate_M1(partitioned_matrices_A[0], partitioned_matrices_A[3], partitioned_matrices_B[0], partitioned_matrices_B[3], &intermediates[0], &stack);
-    calculate_M2(partitioned_matrices_A[1], partitioned_matrices_A[3], partitioned_matrices_B[0], &intermediates[1], &stack);
-    calculate_M3(partitioned_matrices_A[0], partitioned_matrices_A[0], partitioned_matrices_B[1], partitioned_matrices_B[3], &intermediates[2], &stack);
-    calculate_M4(partitioned_matrices_A[3], partitioned_matrices_A[3], partitioned_matrices_B[2], partitioned_matrices_B[0], &intermediates[3], &stack);
-    calculate_M5(partitioned_matrices_A[0], partitioned_matrices_A[1], partitioned_matrices_B[3], partitioned_matrices_B[3], &intermediates[4], &stack);
-    calculate_M6(partitioned_matrices_A[1], partitioned_matrices_A[0], partitioned_matrices_B[0], partitioned_matrices_B[1], &intermediates[5], &stack);
-    calculate_M7(partitioned_matrices_A[1], partitioned_matrices_A[3], partitioned_matrices_B[2], partitioned_matrices_B[3], &intermediates[6], &stack);
+    calculate_M1(partitioned_matrices_A[0], partitioned_matrices_A[3], partitioned_matrices_B[0], partitioned_matrices_B[3], &intermediates[0], stack);
+    calculate_M2_M5(partitioned_matrices_A[2], partitioned_matrices_A[3], partitioned_matrices_B[0], &intermediates[1], stack);
+    calculate_M3_M4(partitioned_matrices_A[0], partitioned_matrices_B[1], partitioned_matrices_B[3], &intermediates[2], stack);
+    calculate_M3_M4(partitioned_matrices_A[3], partitioned_matrices_B[2], partitioned_matrices_B[0], &intermediates[3], stack);
+    calculate_M2_M5(partitioned_matrices_A[0], partitioned_matrices_A[1], partitioned_matrices_B[3], &intermediates[4], stack);
+    calculate_M6_M7(partitioned_matrices_A[1], partitioned_matrices_A[0], partitioned_matrices_B[0], partitioned_matrices_B[1], &intermediates[5], stack);
+    calculate_M6_M7(partitioned_matrices_A[1], partitioned_matrices_A[3], partitioned_matrices_B[2], partitioned_matrices_B[3], &intermediates[6], stack);
 
     // Ensure all intermediates have been processed
     for (int i = 0; i < 7; i++)

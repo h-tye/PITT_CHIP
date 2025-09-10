@@ -7,18 +7,43 @@
  * 3. Structs are okay but should not have associated functions, i.e no methods
  */
 
-int main(int dim1, int dim2)
+int main(int argc, char **argv)
 {
+    if (argc != 3)
+    {
+        fprintf(stderr, "Usage: %s <dim1_rows> <dim2_cols>\n", argv[0]);
+        return 1;
+    }
 
-    // Define input array structure, temporaray until I/O implemented
+    int dim1 = atoi(argv[1]);
+    int dim2 = atoi(argv[2]);
+
+    if (dim1 <= 0 || dim2 <= 0)
+    {
+        fprintf(stderr, "Error: dimensions must be positive integers.\n");
+        return 1;
+    }
+    if ((dim1 % 2) != 0 || (dim2 % 2) != 0)
+    {
+        fprintf(stderr, "Error: dimensions must be even for 2x2 partitioning.\n");
+        return 1;
+    }
+
     int *input_buffer_A = (int *)malloc(dim1 * dim2 * sizeof(int));
     int *input_buffer_B = (int *)malloc(dim1 * dim2 * sizeof(int));
+    if (input_buffer_A == NULL || input_buffer_B == NULL)
+    {
+        fprintf(stderr, "Error: memory allocation failed.\n");
+        free(input_buffer_A);
+        free(input_buffer_B);
+        return 1;
+    }
 
     Matrix input_matrix_A = matrix_build(input_buffer_A, dim1, dim2);
     Matrix input_matrix_B = matrix_build(input_buffer_B, dim1, dim2);
 
-    Matrix partitioned_matrices_A[4]; // First 4 partitions of the matrix
-    Matrix partitioned_matrices_B[4]; // First 4 partitions of the matrix
+    Matrix partitioned_matrices_A[4];
+    Matrix partitioned_matrices_B[4];
 
     for (int i = 1; i <= 4; i++)
     {
@@ -26,7 +51,12 @@ int main(int dim1, int dim2)
         partitioned_matrices_B[i - 1] = matrix_partition(input_matrix_B, dim1 / 2, dim2 / 2, i);
     }
 
-    // Enter recursion
-    calculate_intermediates(partitioned_matrices_A, partitioned_matrices_B);
-    
+    MatrixStack *stack = (MatrixStack *)malloc(sizeof(MatrixStack));
+    Matrix intermediates[7];
+    calculate_intermediates(partitioned_matrices_A, partitioned_matrices_B, &intermediates, stack);
+
+    free(input_buffer_A);
+    free(input_buffer_B);
+    free(stack);
+    return 0;
 }
