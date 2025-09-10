@@ -22,8 +22,8 @@ int main(int dim1, int dim2)
         partitioned_matrices[i - 1] = matrix_partition(input_matrix, dim1 / 2, dim2 / 2, i);
     }
 
-    Matrix intermediates[7]; // Intermediate matrices for Strassen's algorithm, M values
+    MatrixStack intermediates; // Intermediate matrices for Strassen's algorithm, M values
 
     // Enter recursion
-    calculate_intermediates(partitioned_matrices, intermediates);
+    calculate_intermediates(partitioned_matrices, &intermediates);
 }
