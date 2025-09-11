@@ -36,8 +36,8 @@ int main(int argc, char **argv)
     printf("Dim check : %d\n", dim1 * dim2);
     for (i = 0; i < (dim1 * dim2); i++)
     {
-        input_buffer_A[i] = rand() % 10; // Random values between 0 and 9
-        input_buffer_B[i] = rand() % 10; // Random values between 0 and 9
+        input_buffer_A[i] = i;                 // Sequential values
+        input_buffer_B[i] = (dim1 * dim2) - i; // Reverse sequential values
     }
 
     if (input_buffer_A == NULL || input_buffer_B == NULL)
@@ -62,7 +62,34 @@ int main(int argc, char **argv)
 
     MatrixStack *stack = (MatrixStack *)malloc(sizeof(MatrixStack));
     Matrix intermediates[7];
-    calculate_intermediates(partitioned_matrices_A, partitioned_matrices_B, intermediates, stack);
+    calculate_intermediates(partitioned_matrices_A, partitioned_matrices_B, &intermediates, stack);
+
+    // Print intermediates for debugging
+    for (int i = 0; i < 7; i++)
+    {
+        printf("Intermediate M%d:\n", i + 1);
+        for (int r = 0; r < intermediates[i].rows; r++)
+        {
+            for (int c = 0; c < intermediates[i].cols; c++)
+            {
+                printf("%d ", intermediates[i].matrix[r][c]);
+            }
+            printf("\n");
+        }
+        printf("\n");
+    }
+
+    Matrix result;
+    calculate_product(intermediates, &result, dim1, dim2);
+
+    // Print the result matrix
+    for (int i = 0; i < result.rows; i++)
+    {
+        for (int j = 0; j < result.cols; j++)
+        {
+            printf("Row: %d Col: %d Value: %d\n", i, j, result.matrix[i][j]);
+        }
+    }
 
     free(input_buffer_A);
     free(input_buffer_B);

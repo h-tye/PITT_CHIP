@@ -15,6 +15,20 @@ typedef struct
     Matrix *stack;
 } MatrixStack;
 
+void matrix_init(Matrix *mat, int rows, int cols)
+{
+    mat->rows = rows;
+    mat->cols = cols;
+    mat->processed = 0; // Initialize as not processed
+
+    // Allocate memory for the 2D array
+    mat->matrix = (int **)malloc(rows * sizeof(int *));
+    for (int i = 0; i < rows; i++)
+    {
+        mat->matrix[i] = (int *)malloc(cols * sizeof(int));
+    }
+}
+
 Matrix matrix_build(int *input_buffer, int dim1, int dim2)
 {
     Matrix mat;
@@ -376,4 +390,40 @@ int calculate_intermediates(Matrix partitioned_matrices_A[4], Matrix partitioned
     }
 
     return 0; // Indicate success
+}
+
+void calculate_product(Matrix intermediates[7], Matrix *result, int dim1, int dim2)
+{
+    // Initialize the result matrix
+    result->rows = dim1;
+    result->cols = dim2;
+    result->matrix = (int **)malloc(result->rows * sizeof(int *));
+    for (int i = 0; i < result->rows; i++)
+    {
+        result->matrix[i] = (int *)malloc(result->cols * sizeof(int));
+    }
+
+    // Fill the result matrix using the intermediates
+    for (int i = 0; i < result->rows; i++)
+    {
+        for (int j = 0; j < result->cols; j++)
+        {
+            if (i < result->rows / 2 && j < result->cols / 2) // C11 = M1 + M4 - M5 + M7
+            {
+                result->matrix[i][j] = intermediates[0].matrix[i][j] + intermediates[3].matrix[i][j] - intermediates[4].matrix[i][j] + intermediates[6].matrix[i][j];
+            }
+            else if (i < result->rows / 2 && j >= result->cols / 2) // C12 = M3 + M5
+            {
+                result->matrix[i][j] = intermediates[2].matrix[i][j - result->cols / 2] + intermediates[4].matrix[i][j - result->cols / 2];
+            }
+            else if (i >= result->rows / 2 && j < result->cols / 2) // C21 = M2 + M4
+            {
+                result->matrix[i][j] = intermediates[1].matrix[i - result->rows / 2][j] + intermediates[3].matrix[i - result->rows / 2][j];
+            }
+            else // C22 = M1 - M2 + M3 + M6
+            {
+                result->matrix[i][j] = intermediates[0].matrix[i - result->rows / 2][j - result->cols / 2] - intermediates[1].matrix[i - result->rows / 2][j - result->cols / 2] + intermediates[2].matrix[i - result->rows / 2][j - result->cols / 2] + intermediates[5].matrix[i - result->rows / 2][j - result->cols / 2];
+            }
+        }
+    }
 }
