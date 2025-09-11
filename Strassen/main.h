@@ -104,10 +104,10 @@ void calculate_M1(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *M1, Ma
         Matrix sub_matrices_A[4];
         Matrix sub_matrices_B[4];
 
-        for (int i = 1; i <= 4; i++)
+        for (int i = 0; i < 4; i++)
         {
-            sub_matrices_A[i - 1] = matrix_partition(A_result, A_result.rows / 2, A_result.cols / 2, i);
-            sub_matrices_B[i - 1] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
+            sub_matrices_A[i] = matrix_partition(A_result, A_result.rows / 2, A_result.cols / 2, i);
+            sub_matrices_B[i] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
         }
 
         // Initialize new set of intermediates for recursion
@@ -173,9 +173,9 @@ void calculate_M2_M5(Matrix A1, Matrix A2, Matrix B11, Matrix *M, MatrixStack *s
         Matrix sub_matrices_A[4];
         Matrix sub_matrices_B[4];
 
-        for (int i = 1; i <= 4; i++)
+        for (int i = 0; i < 4; i++)
         {
-            sub_matrices_A[i - 1] = matrix_partition(A_result, A_result.rows / 2, A_result.cols / 2, i);
+            sub_matrices_A[i] = matrix_partition(A_result, A_result.rows / 2, A_result.cols / 2, i);
         }
 
         // Initialize new set of intermediates for recursion
@@ -241,9 +241,9 @@ void calculate_M3_M4(Matrix A1, Matrix B1, Matrix B2, Matrix *M, MatrixStack *st
         Matrix sub_matrices_A[4];
         Matrix sub_matrices_B[4];
 
-        for (int i = 1; i <= 4; i++)
+        for (int i = 0; i < 4; i++)
         {
-            sub_matrices_A[i - 1] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
+            sub_matrices_A[i] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
         }
 
         // Initialize new set of intermediates for recursion
@@ -313,10 +313,10 @@ void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *M, 
         Matrix sub_matrices_A[4];
         Matrix sub_matrices_B[4];
 
-        for (int i = 1; i <= 4; i++)
+        for (int i = 0; i < 4; i++)
         {
-            sub_matrices_A[i - 1] = matrix_partition(A_result, A_result.rows / 2, A_result.cols / 2, i);
-            sub_matrices_B[i - 1] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
+            sub_matrices_A[i] = matrix_partition(A_result, A_result.rows / 2, A_result.cols / 2, i);
+            sub_matrices_B[i] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
         }
 
         // Initialize new set of intermediates for recursion
