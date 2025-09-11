@@ -98,7 +98,7 @@ void calculate_M1(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *M1, Ma
     }
 
     // Check if further partitioning is needed
-    if (A_result.rows > 1 && A_result.cols > 1 && B_result.rows > 1 && B_result.cols > 1)
+    if (A_result.rows > 2 && A_result.cols > 2 && B_result.rows > 2 && B_result.cols > 2)
     {
         // Further partition and push to stack
         Matrix sub_matrices_A[4];
@@ -112,7 +112,7 @@ void calculate_M1(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *M1, Ma
 
         // Initialize new set of intermediates for recursion
         Matrix intermediates[7];
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediates, stack);
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediates, stack);
     }
     else
     {
@@ -167,7 +167,7 @@ void calculate_M2_M5(Matrix A1, Matrix A2, Matrix B11, Matrix *M, MatrixStack *s
     }
 
     // Check if further partitioning is needed
-    if (A_result.rows > 1 && A_result.cols > 1)
+    if (A_result.rows > 2 && A_result.cols > 2)
     {
         // Further partition and push to stack
         Matrix sub_matrices_A[4];
@@ -180,7 +180,7 @@ void calculate_M2_M5(Matrix A1, Matrix A2, Matrix B11, Matrix *M, MatrixStack *s
 
         // Initialize new set of intermediates for recursion
         Matrix intermediates[7];
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediates, stack);
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediates, stack);
     }
     else
     {
@@ -235,7 +235,7 @@ void calculate_M3_M4(Matrix A1, Matrix B1, Matrix B2, Matrix *M, MatrixStack *st
     }
 
     // Check if further partitioning is needed
-    if (B_result.rows > 1 && B_result.cols > 1)
+    if (B_result.rows > 2 && B_result.cols > 2)
     {
         // Further partition and push to stack
         Matrix sub_matrices_A[4];
@@ -248,7 +248,7 @@ void calculate_M3_M4(Matrix A1, Matrix B1, Matrix B2, Matrix *M, MatrixStack *st
 
         // Initialize new set of intermediates for recursion
         Matrix intermediates[7];
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediates, stack);
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediates, stack);
     }
     else
     {
@@ -307,7 +307,7 @@ void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *M, 
     }
 
     // Check if further partitioning is needed
-    if (A_result.rows > 1 && A_result.cols > 1 && B_result.rows > 1 && B_result.cols > 1)
+    if (A_result.rows > 2 && A_result.cols > 2 && B_result.rows > 2 && B_result.cols > 2)
     {
         // Further partition and push to stack
         Matrix sub_matrices_A[4];
@@ -321,7 +321,7 @@ void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *M, 
 
         // Initialize new set of intermediates for recursion
         Matrix intermediates[7];
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediates, stack);
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediates, stack);
     }
     else
     {
