@@ -13,6 +13,7 @@ typedef struct
 typedef struct
 {
     Matrix *stack;
+    int size;
 } MatrixStack;
 
 void matrix_init(Matrix *mat, int rows, int cols)
@@ -27,6 +28,14 @@ void matrix_init(Matrix *mat, int rows, int cols)
     {
         mat->matrix[i] = (int *)malloc(cols * sizeof(int));
     }
+}
+
+void push(MatrixStack *stack, Matrix mat)
+{
+    // For simplicity, we won't implement dynamic resizing of the stack
+    stack->stack = (Matrix *)realloc(stack->stack, sizeof(Matrix) * (stack->size + 1));
+    stack->stack[stack->size] = mat;
+    stack->size++;
 }
 
 Matrix matrix_build(int *input_buffer, int dim1, int dim2)
@@ -84,7 +93,7 @@ Matrix matrix_partition(Matrix input_matrix, int new_rows, int new_cols, int qua
 }
 
 // M1 = (A11 + A22) * (B11 + B22)
-void calculate_M1(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *M1, MatrixStack *stack)
+void calculate_M1(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *intermediates, MatrixStack *stack)
 {
 
     // First instantiate new matrices to hold the sums
@@ -124,41 +133,40 @@ void calculate_M1(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *M1, Ma
             sub_matrices_B[i] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
         }
 
-        // Initialize new set of intermediates for recursion
-        Matrix intermediates[7];
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediates, stack);
+        // Calculate M1 by using sub-matrices
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediates[0], stack);
     }
     else
     {
         // Base case: perform standard multiplication
-        M1->rows = A_result.rows;
-        M1->cols = B_result.cols;
-        M1->matrix = (int **)malloc(M1->rows * sizeof(int *));
-        for (int i = 0; i < M1->rows; i++)
+        intermediates[0].rows = A_result.rows;
+        intermediates[0].cols = B_result.cols;
+        intermediates[0].matrix = (int **)malloc(intermediates[0].rows * sizeof(int *));
+        for (int i = 0; i < intermediates[0].rows; i++)
         {
-            M1->matrix[i] = (int *)malloc(M1->cols * sizeof(int));
+            intermediates[0].matrix[i] = (int *)malloc(intermediates[0].cols * sizeof(int));
         }
 
-        for (int i = 0; i < M1->rows; i++)
+        for (int i = 0; i < intermediates[0].rows; i++)
         {
-            for (int j = 0; j < M1->cols; j++)
+            for (int j = 0; j < intermediates[0].cols; j++)
             {
-                M1->matrix[i][j] = 0;
+                intermediates[0].matrix[i][j] = 0;
                 for (int k = 0; k < A_result.cols; k++)
                 {
-                    M1->matrix[i][j] += A_result.matrix[i][k] * B_result.matrix[k][j];
+                    intermediates[0].matrix[i][j] += A_result.matrix[i][k] * B_result.matrix[k][j];
                 }
             }
         }
 
-        M1->processed = 1; // Mark as processed
+        intermediates[0].processed = 1; // Mark as processed
 
         return;
     }
 }
 
 // M2 = (A21 + A22) * B11, M5 = (A11 + A12) * B22
-void calculate_M2_M5(Matrix A1, Matrix A2, Matrix B11, Matrix *M, MatrixStack *stack)
+void calculate_M2_M5(Matrix A1, Matrix A2, Matrix B11, Matrix *intermediates, MatrixStack *stack, int index)
 {
 
     // First instantiate new matrices to hold the sums
@@ -193,40 +201,39 @@ void calculate_M2_M5(Matrix A1, Matrix A2, Matrix B11, Matrix *M, MatrixStack *s
         }
 
         // Initialize new set of intermediates for recursion
-        Matrix intermediates[7];
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediates, stack);
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediates[index], stack);
     }
     else
     {
         // Base case: perform standard multiplication
-        M->rows = A_result.rows;
-        M->cols = A_result.cols;
-        M->matrix = (int **)malloc(M->rows * sizeof(int *));
-        for (int i = 0; i < M->rows; i++)
+        intermediates[index].rows = A_result.rows;
+        intermediates[index].cols = B11.cols;
+        intermediates[index].matrix = (int **)malloc(intermediates[index].rows * sizeof(int *));
+        for (int i = 0; i < intermediates[index].rows; i++)
         {
-            M->matrix[i] = (int *)malloc(M->cols * sizeof(int));
+            intermediates[index].matrix[i] = (int *)malloc(intermediates[index].cols * sizeof(int));
         }
 
-        for (int i = 0; i < M->rows; i++)
+        for (int i = 0; i < intermediates[index].rows; i++)
         {
-            for (int j = 0; j < M->cols; j++)
+            for (int j = 0; j < intermediates[index].cols; j++)
             {
-                M->matrix[i][j] = 0;
+                intermediates[index].matrix[i][j] = 0;
                 for (int k = 0; k < A_result.cols; k++)
                 {
-                    M->matrix[i][j] += A_result.matrix[i][k] * B11.matrix[k][j];
+                    intermediates[index].matrix[i][j] += A_result.matrix[i][k] * B11.matrix[k][j];
                 }
             }
         }
 
-        M->processed = 1; // Mark as processed
+        intermediates[index].processed = 1; // Mark as processed
 
         return;
     }
 }
 
 // M3 = A11 * (B12 - B22),  M4 = A22 * (B21 - B11)
-void calculate_M3_M4(Matrix A1, Matrix B1, Matrix B2, Matrix *M, MatrixStack *stack)
+void calculate_M3_M4(Matrix A1, Matrix B1, Matrix B2, Matrix *intermediates, MatrixStack *stack, int index)
 {
 
     // First instantiate new matrices to hold the sums
@@ -261,40 +268,39 @@ void calculate_M3_M4(Matrix A1, Matrix B1, Matrix B2, Matrix *M, MatrixStack *st
         }
 
         // Initialize new set of intermediates for recursion
-        Matrix intermediates[7];
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediates, stack);
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediates[index], stack);
     }
     else
     {
         // Base case: perform standard multiplication
-        M->rows = B_result.rows;
-        M->cols = B_result.cols;
-        M->matrix = (int **)malloc(M->rows * sizeof(int *));
-        for (int i = 0; i < M->rows; i++)
+        intermediates[index].rows = A1.rows;
+        intermediates[index].cols = B_result.cols;
+        intermediates[index].matrix = (int **)malloc(intermediates[index].rows * sizeof(int *));
+        for (int i = 0; i < intermediates[index].rows; i++)
         {
-            M->matrix[i] = (int *)malloc(M->cols * sizeof(int));
+            intermediates[index].matrix[i] = (int *)malloc(intermediates[index].cols * sizeof(int));
         }
 
-        for (int i = 0; i < M->rows; i++)
+        for (int i = 0; i < intermediates[index].rows; i++)
         {
-            for (int j = 0; j < M->cols; j++)
+            for (int j = 0; j < intermediates[index].cols; j++)
             {
-                M->matrix[i][j] = 0;
-                for (int k = 0; k < B_result.cols; k++)
+                intermediates[index].matrix[i][j] = 0;
+                for (int k = 0; k < A1.cols; k++)
                 {
-                    M->matrix[i][j] += B_result.matrix[i][k] * A1.matrix[k][j];
+                    intermediates[index].matrix[i][j] += A1.matrix[i][k] * B_result.matrix[k][j];
                 }
             }
         }
 
-        M->processed = 1; // Mark as processed
+        intermediates[index].processed = 1; // Mark as processed
 
         return;
     }
 }
 
 // M6 = (A21 - A11) * (B11 + B12), M7 = (A12 - A22) * (B21 + B22)
-void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *M, MatrixStack *stack)
+void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *intermediates, MatrixStack *stack, int index)
 {
     // First instantiate new matrices to hold the sums
     Matrix A_result, B_result;
@@ -334,49 +340,49 @@ void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *M, 
         }
 
         // Initialize new set of intermediates for recursion
-        Matrix intermediates[7];
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediates, stack);
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediates[index], stack);
     }
     else
     {
         // Base case: perform standard multiplication
-        M->rows = A_result.rows;
-        M->cols = B_result.cols;
-        M->matrix = (int **)malloc(M->rows * sizeof(int *));
-        for (int i = 0; i < M->rows; i++)
+        intermediates[index].rows = A_result.rows;
+        intermediates[index].cols = B_result.cols;
+        intermediates[index].matrix = (int **)malloc(intermediates[index].rows * sizeof(int *));
+        for (int i = 0; i < intermediates[index].rows; i++)
         {
-            M->matrix[i] = (int *)malloc(M->cols * sizeof(int));
+            intermediates[index].matrix[i] = (int *)malloc(intermediates[index].cols * sizeof(int));
         }
 
-        for (int i = 0; i < M->rows; i++)
+        for (int i = 0; i < intermediates[index].rows; i++)
         {
-            for (int j = 0; j < M->cols; j++)
+            for (int j = 0; j < intermediates[index].cols; j++)
             {
-                M->matrix[i][j] = 0;
+                intermediates[index].matrix[i][j] = 0;
                 for (int k = 0; k < A_result.cols; k++)
                 {
-                    M->matrix[i][j] += A_result.matrix[i][k] * B_result.matrix[k][j];
+                    intermediates[index].matrix[i][j] += A_result.matrix[i][k] * B_result.matrix[k][j];
                 }
             }
         }
 
-        M->processed = 1; // Mark as processed
+        intermediates[index].processed = 1; // Mark as processed
 
         return;
     }
 }
 
-int calculate_intermediates(Matrix partitioned_matrices_A[4], Matrix partitioned_matrices_B[4], Matrix *intermediates, MatrixStack *stack)
+int calculate_intermediates(Matrix partitioned_matrices_A[4], Matrix partitioned_matrices_B[4], Matrix *result, MatrixStack *stack)
 {
 
-    // Compute
+    // Compute intermediates
+    Matrix intermediates[7];
     calculate_M1(partitioned_matrices_A[0], partitioned_matrices_A[3], partitioned_matrices_B[0], partitioned_matrices_B[3], &intermediates[0], stack);
-    calculate_M2_M5(partitioned_matrices_A[2], partitioned_matrices_A[3], partitioned_matrices_B[0], &intermediates[1], stack);
-    calculate_M3_M4(partitioned_matrices_A[0], partitioned_matrices_B[1], partitioned_matrices_B[3], &intermediates[2], stack);
-    calculate_M3_M4(partitioned_matrices_A[3], partitioned_matrices_B[2], partitioned_matrices_B[0], &intermediates[3], stack);
-    calculate_M2_M5(partitioned_matrices_A[0], partitioned_matrices_A[1], partitioned_matrices_B[3], &intermediates[4], stack);
-    calculate_M6_M7(partitioned_matrices_A[1], partitioned_matrices_A[0], partitioned_matrices_B[0], partitioned_matrices_B[1], &intermediates[5], stack);
-    calculate_M6_M7(partitioned_matrices_A[1], partitioned_matrices_A[3], partitioned_matrices_B[2], partitioned_matrices_B[3], &intermediates[6], stack);
+    calculate_M2_M5(partitioned_matrices_A[2], partitioned_matrices_A[3], partitioned_matrices_B[0], &intermediates[1], stack, 1);
+    calculate_M3_M4(partitioned_matrices_A[0], partitioned_matrices_B[1], partitioned_matrices_B[3], &intermediates[2], stack, 2);
+    calculate_M3_M4(partitioned_matrices_A[3], partitioned_matrices_B[2], partitioned_matrices_B[0], &intermediates[3], stack, 3);
+    calculate_M2_M5(partitioned_matrices_A[0], partitioned_matrices_A[1], partitioned_matrices_B[3], &intermediates[4], stack, 4);
+    calculate_M6_M7(partitioned_matrices_A[1], partitioned_matrices_A[0], partitioned_matrices_B[0], partitioned_matrices_B[1], &intermediates[5], stack, 5);
+    calculate_M6_M7(partitioned_matrices_A[1], partitioned_matrices_A[3], partitioned_matrices_B[2], partitioned_matrices_B[3], &intermediates[6], stack, 6);
 
     // Ensure all intermediates have been processed
     for (int i = 0; i < 7; i++)
@@ -388,6 +394,9 @@ int calculate_intermediates(Matrix partitioned_matrices_A[4], Matrix partitioned
             return -1; // Indicate error
         }
     }
+
+    // Once all intermediates are computed, compute the product
+    calculate_product(intermediates, result, partitioned_matrices_A[0].rows, partitioned_matrices_B[0].cols);
 
     return 0; // Indicate success
 }
