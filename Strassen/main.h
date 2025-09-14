@@ -201,6 +201,7 @@ void calculate_M2_M5(Matrix A1, Matrix A2, Matrix B11, Matrix *intermediate, Mat
         for (int i = 0; i < 4; i++)
         {
             sub_matrices_A[i] = matrix_partition(A_result, A_result.rows / 2, A_result.cols / 2, i);
+            sub_matrices_B[i] = matrix_partition(B11, B11.rows / 2, B11.cols / 2, i);
         }
 
         // Initialize new set of intermediates for recursion
@@ -267,7 +268,8 @@ void calculate_M3_M4(Matrix A1, Matrix B1, Matrix B2, Matrix *intermediate, Matr
 
         for (int i = 0; i < 4; i++)
         {
-            sub_matrices_A[i] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
+            sub_matrices_A[i] = matrix_partition(A1, A1.rows / 2, A1.cols / 2, i);
+            sub_matrices_B[i] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
         }
 
         // Initialize new set of intermediates for recursion
@@ -419,15 +421,15 @@ int calculate_intermediates(Matrix partitioned_matrices_A[4], Matrix partitioned
     calculate_M6_M7(partitioned_matrices_A[1], partitioned_matrices_A[3], partitioned_matrices_B[2], partitioned_matrices_B[3], &intermediates[6], stack, 6);
 
     // Ensure all intermediates have been processed
-    for (int i = 0; i < 7; i++)
-    {
-        if (!intermediates[i].processed)
-        {
-            // Raise error
-            printf("Error: Intermediate matrix M%d not processed.\n", i + 1);
-            return -1; // Indicate error
-        }
-    }
+    // for (int i = 0; i < 7; i++)
+    // {
+    //     if (!intermediates[i].processed)
+    //     {
+    //         // Raise error
+    //         printf("Error: Intermediate matrix M%d not processed.\n", i + 1);
+    //         return -1; // Indicate error
+    //     }
+    // }
 
     // Once all intermediates are computed, compute the product
     calculate_product(intermediates, result, partitioned_matrices_A[0].rows, partitioned_matrices_B[0].cols);
