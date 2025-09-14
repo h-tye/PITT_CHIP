@@ -3,8 +3,7 @@
 /**
  * CODING STANDARDS:
  * 1. Avoid using complex libraries
- * 2. Arrays should be used instead of pointers where possible
- * 3. Structs are okay but should not have associated functions, i.e no methods
+ * 2. Structs are okay but should not have associated functions, i.e no methods
  */
 
 int main(int argc, char **argv)
@@ -61,26 +60,8 @@ int main(int argc, char **argv)
     }
 
     MatrixStack *stack = (MatrixStack *)malloc(sizeof(MatrixStack));
-    Matrix intermediates[7];
-    calculate_intermediates(partitioned_matrices_A, partitioned_matrices_B, &intermediates, stack);
-
-    // Print intermediates for debugging
-    for (int i = 0; i < 7; i++)
-    {
-        printf("Intermediate M%d:\n", i + 1);
-        for (int r = 0; r < intermediates[i].rows; r++)
-        {
-            for (int c = 0; c < intermediates[i].cols; c++)
-            {
-                printf("%d ", intermediates[i].matrix[r][c]);
-            }
-            printf("\n");
-        }
-        printf("\n");
-    }
-
     Matrix result;
-    calculate_product(intermediates, &result, dim1, dim2);
+    calculate_intermediates(partitioned_matrices_A, partitioned_matrices_B, &result, stack);
 
     // Print the result matrix
     for (int i = 0; i < result.rows; i++)
