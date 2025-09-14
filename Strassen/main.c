@@ -59,7 +59,6 @@ int main(int argc, char **argv)
         partitioned_matrices_B[i] = matrix_partition(input_matrix_B, dim1 / 2, dim2 / 2, i);
     }
 
-    MatrixStack *stack = (MatrixStack *)malloc(sizeof(MatrixStack));
     Matrix result;
     result.rows = dim1;
     result.cols = dim2;
@@ -68,11 +67,10 @@ int main(int argc, char **argv)
     {
         result.matrix[i] = (int *)malloc(result.cols * sizeof(int));
     }
-    calculate_intermediates(partitioned_matrices_A, partitioned_matrices_B, &result, stack);
+    calculate_intermediates(partitioned_matrices_A, partitioned_matrices_B, &result);
 
     free(input_buffer_A);
     free(input_buffer_B);
-    free(stack);
     free(result.matrix);
     return 0;
 }
