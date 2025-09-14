@@ -137,7 +137,7 @@ void calculate_M1(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *interm
         }
 
         // Calculate M1 by using sub-matrices
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediate, stack);
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediate, stack);
     }
     else
     {
@@ -204,7 +204,7 @@ void calculate_M2_M5(Matrix A1, Matrix A2, Matrix B11, Matrix *intermediate, Mat
         }
 
         // Initialize new set of intermediates for recursion
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediate, stack);
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediate, stack);
     }
     else
     {
@@ -271,7 +271,7 @@ void calculate_M3_M4(Matrix A1, Matrix B1, Matrix B2, Matrix *intermediate, Matr
         }
 
         // Initialize new set of intermediates for recursion
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediate, stack);
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediate, stack);
     }
     else
     {
@@ -343,7 +343,7 @@ void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *int
         }
 
         // Initialize new set of intermediates for recursion
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, &intermediate, stack);
+        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediate, stack);
     }
     else
     {
@@ -376,14 +376,6 @@ void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *int
 
 void calculate_product(Matrix intermediates[7], Matrix *result, int dim1, int dim2)
 {
-    // Initialize the result matrix
-    result->rows = dim1;
-    result->cols = dim2;
-    result->matrix = (int **)malloc(result->rows * sizeof(int *));
-    for (int i = 0; i < result->rows; i++)
-    {
-        result->matrix[i] = (int *)malloc(result->cols * sizeof(int));
-    }
 
     // Fill the result matrix using the intermediates
     for (int i = 0; i < result->rows; i++)
@@ -440,14 +432,13 @@ int calculate_intermediates(Matrix partitioned_matrices_A[4], Matrix partitioned
     // Once all intermediates are computed, compute the product
     calculate_product(intermediates, result, partitioned_matrices_A[0].rows, partitioned_matrices_B[0].cols);
 
-    // Print the result matrix, debug
+    // Print the result matrix
     for (int i = 0; i < result->rows; i++)
     {
         for (int j = 0; j < result->cols; j++)
         {
-            printf("%d ", result->matrix[i][j]);
+            printf("Row: %d Col: %d Value: %d\n", i, j, result->matrix[i][j]);
         }
-        printf("\n");
     }
 
     return 0; // Indicate success

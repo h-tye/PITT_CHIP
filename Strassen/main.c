@@ -63,15 +63,6 @@ int main(int argc, char **argv)
     Matrix result;
     calculate_intermediates(partitioned_matrices_A, partitioned_matrices_B, &result, stack);
 
-    // Print the result matrix
-    for (int i = 0; i < result.rows; i++)
-    {
-        for (int j = 0; j < result.cols; j++)
-        {
-            printf("Row: %d Col: %d Value: %d\n", i, j, result.matrix[i][j]);
-        }
-    }
-
     free(input_buffer_A);
     free(input_buffer_B);
     free(stack);
