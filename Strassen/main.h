@@ -161,11 +161,9 @@ void calculate_M1(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *interm
                 }
             }
         }
-
-        intermediate->processed = 1; // Mark as processed
-
-        return;
     }
+
+    intermediate->processed = 1; // Mark as processed
 }
 
 // M2 = (A21 + A22) * B11, M5 = (A11 + A12) * B22
@@ -229,11 +227,9 @@ void calculate_M2_M5(Matrix A1, Matrix A2, Matrix B11, Matrix *intermediate, Mat
                 }
             }
         }
-
-        intermediate->processed = 1; // Mark as processed
-
-        return;
     }
+
+    intermediate->processed = 1; // Mark as processed
 }
 
 // M3 = A11 * (B12 - B22),  M4 = A22 * (B21 - B11)
@@ -297,11 +293,9 @@ void calculate_M3_M4(Matrix A1, Matrix B1, Matrix B2, Matrix *intermediate, Matr
                 }
             }
         }
-
-        intermediate->processed = 1; // Mark as processed
-
-        return;
     }
+
+    intermediate->processed = 1; // Mark as processed
 }
 
 // M6 = (A21 - A11) * (B11 + B12), M7 = (A12 - A22) * (B21 + B22)
@@ -369,11 +363,9 @@ void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *int
                 }
             }
         }
-
-        intermediate->processed = 1; // Mark as processed
-
-        return;
     }
+
+    intermediate->processed = 1; // Mark as processed
 }
 
 void calculate_product(Matrix intermediates[7], Matrix *result, int dim1, int dim2)
@@ -421,15 +413,15 @@ int calculate_intermediates(Matrix partitioned_matrices_A[4], Matrix partitioned
     calculate_M6_M7(partitioned_matrices_A[1], partitioned_matrices_A[3], partitioned_matrices_B[2], partitioned_matrices_B[3], &intermediates[6], stack, 6);
 
     // Ensure all intermediates have been processed
-    // for (int i = 0; i < 7; i++)
-    // {
-    //     if (!intermediates[i].processed)
-    //     {
-    //         // Raise error
-    //         printf("Error: Intermediate matrix M%d not processed.\n", i + 1);
-    //         return -1; // Indicate error
-    //     }
-    // }
+    for (int i = 0; i < 7; i++)
+    {
+        if (!intermediates[i].processed)
+        {
+            // Raise error
+            printf("Error: Intermediate matrix M%d not processed.\n", i + 1);
+            return -1; // Indicate error
+        }
+    }
 
     // Once all intermediates are computed, compute the product
     calculate_product(intermediates, result, partitioned_matrices_A[0].rows, partitioned_matrices_B[0].cols);

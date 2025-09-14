@@ -7,8 +7,8 @@
             "request": "launch",
             "program": "${workspaceFolder}/Strassen/main.exe",
             "args": [
-                "8",
-                "8"
+                "16",
+                "16"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
