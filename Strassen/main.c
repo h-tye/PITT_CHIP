@@ -48,6 +48,16 @@ int main(int argc, char **argv)
     pad_matrix(&input_matrix_A, dim1, dim2);
     pad_matrix(&input_matrix_B, dim2, dim1);
 
+    // Print matrices for debugging
+    for (int i = 0; i < input_matrix_A.rows; i++)
+    {
+        for (int j = 0; j < input_matrix_A.cols; j++)
+        {
+            printf("%d ", input_matrix_A.matrix[i][j]);
+        }
+        printf("\n");
+    }
+
     Matrix partitioned_matrices_A[4];
     Matrix partitioned_matrices_B[4];
 

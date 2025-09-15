@@ -34,6 +34,8 @@ void matrix_init(Matrix *mat, int rows, int cols, int num_matrices)
     {
         mat[i].rows = rows;
         mat[i].cols = cols;
+        mat[i].sig_r = rows;
+        mat[i].sig_c = cols;
         mat[i].processed = 0; // Initialize as not processed
 
         // Allocate memory for the 2D array
@@ -88,11 +90,17 @@ void pad_matrix(Matrix *input_matrix, int rows, int cols)
     }
 
     // Fill the input_matrix->matrix
-    for (int i = rows; i < input_matrix->rows; i++)
+    for (int i = 0; i < input_matrix->rows; i++)
     {
-        for (int j = cols; j < input_matrix->cols; j++)
+        for (int j = 0; j < input_matrix->cols; j++)
         {
 
+            if (i < input_matrix->sig_r && j < input_matrix->sig_c)
+            {
+                continue; // Retain original values
+            }
+
+            // Else pad with zeros
             input_matrix->matrix[i][j] = 0; // Padding with zeros
         }
     }
@@ -178,8 +186,6 @@ void calculate_M1(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *interm
     else
     {
         // Base case: perform standard multiplication
-        intermediate->rows = A_result.rows;
-        intermediate->cols = B_result.cols;
 
         for (int i = 0; i < intermediate->rows; i++)
         {
@@ -243,9 +249,6 @@ void calculate_M2_M5(Matrix A1, Matrix A2, Matrix B11, Matrix *intermediate, int
     else
     {
         // Base case: perform standard multiplication
-        intermediate->rows = A_result.rows;
-        intermediate->cols = B11.cols;
-
         for (int i = 0; i < intermediate->rows; i++)
         {
             for (int j = 0; j < intermediate->cols; j++)
@@ -308,8 +311,6 @@ void calculate_M3_M4(Matrix A1, Matrix B1, Matrix B2, Matrix *intermediate, int 
     else
     {
         // Base case: perform standard multiplication
-        intermediate->rows = A1.rows;
-        intermediate->cols = B_result.cols;
 
         for (int i = 0; i < intermediate->rows; i++)
         {
@@ -377,8 +378,6 @@ void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *int
     else
     {
         // Base case: perform standard multiplication
-        intermediate->rows = A_result.rows;
-        intermediate->cols = B_result.cols;
 
         for (int i = 0; i < intermediate->rows; i++)
         {
