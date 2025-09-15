@@ -8,6 +8,8 @@ typedef struct
     int rows;      // Number of rows
     int cols;      // Number of columns
     int processed; // Flag to indicate if this matrix has been processed
+    int sig_r;     // Significant rows
+    int sig_c;     // Significant columns
 
 } Matrix;
 
@@ -70,22 +72,25 @@ Matrix matrix_build(int *input_buffer, int dim1, int dim2)
 
 void pad_matrix(Matrix *input_matrix, int rows, int cols)
 {
+    // Save actual dimensions
+    input_matrix->sig_r = rows;
+    input_matrix->sig_c = cols;
 
     // Dimensions must be a power of 2 for Strassen's algorithm
-    int new_rows = (int)pow(2, ceil(log2(rows)));
-    int new_cols = (int)pow(2, ceil(log2(cols)));
+    input_matrix->rows = (int)pow(2, ceil(log2(rows)));
+    input_matrix->cols = (int)pow(2, ceil(log2(cols)));
 
     // Allocate memory for the input_matrix->matrix
-    input_matrix->matrix = (int **)realloc(input_matrix->matrix, new_rows * sizeof(int *));
-    for (int i = rows; i < new_rows; i++)
+    input_matrix->matrix = (int **)realloc(input_matrix->matrix, input_matrix->rows * sizeof(int *));
+    for (int i = rows; i < input_matrix->rows; i++)
     {
-        input_matrix->matrix[i] = (int *)malloc(new_cols * sizeof(int));
+        input_matrix->matrix[i] = (int *)malloc(input_matrix->cols * sizeof(int));
     }
 
     // Fill the input_matrix->matrix
-    for (int i = rows; i < new_rows; i++)
+    for (int i = rows; i < input_matrix->rows; i++)
     {
-        for (int j = cols; j < new_cols; j++)
+        for (int j = cols; j < input_matrix->cols; j++)
         {
 
             input_matrix->matrix[i][j] = 0; // Padding with zeros

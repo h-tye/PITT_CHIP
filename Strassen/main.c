@@ -22,11 +22,6 @@ int main(int argc, char **argv)
         fprintf(stderr, "Error: dimensions must be positive integers.\n");
         return 1;
     }
-    if ((dim1 % 2) != 0 || (dim2 % 2) != 0)
-    {
-        fprintf(stderr, "Error: dimensions must be even for 2x2 partitioning.\n");
-        return 1;
-    }
 
     int *input_buffer_A = (int *)malloc(dim1 * dim2 * sizeof(int));
     int *input_buffer_B = (int *)malloc(dim1 * dim2 * sizeof(int));
@@ -58,8 +53,8 @@ int main(int argc, char **argv)
 
     for (int i = 0; i < 4; i++)
     {
-        partitioned_matrices_A[i] = matrix_partition(input_matrix_A, dim1 / 2, dim2 / 2, i);
-        partitioned_matrices_B[i] = matrix_partition(input_matrix_B, dim1 / 2, dim2 / 2, i);
+        partitioned_matrices_A[i] = matrix_partition(input_matrix_A, input_matrix_A.rows / 2, input_matrix_A.cols / 2, i);
+        partitioned_matrices_B[i] = matrix_partition(input_matrix_B, input_matrix_B.rows / 2, input_matrix_B.cols / 2, i);
     }
 
     Matrix result;
