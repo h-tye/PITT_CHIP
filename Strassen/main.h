@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 typedef struct
 {
@@ -67,6 +68,31 @@ Matrix matrix_build(int *input_buffer, int dim1, int dim2)
     return mat;
 }
 
+void pad_matrix(Matrix *input_matrix, int rows, int cols)
+{
+
+    // Dimensions must be a power of 2 for Strassen's algorithm
+    int new_rows = (int)pow(2, ceil(log2(rows)));
+    int new_cols = (int)pow(2, ceil(log2(cols)));
+
+    // Allocate memory for the input_matrix->matrix
+    input_matrix->matrix = (int **)realloc(input_matrix->matrix, new_rows * sizeof(int *));
+    for (int i = rows; i < new_rows; i++)
+    {
+        input_matrix->matrix[i] = (int *)malloc(new_cols * sizeof(int));
+    }
+
+    // Fill the input_matrix->matrix
+    for (int i = rows; i < new_rows; i++)
+    {
+        for (int j = cols; j < new_cols; j++)
+        {
+
+            input_matrix->matrix[i][j] = 0; // Padding with zeros
+        }
+    }
+}
+
 Matrix matrix_partition(Matrix input_matrix, int new_rows, int new_cols, int quadrant)
 {
 
@@ -131,6 +157,10 @@ void calculate_M1(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *interm
         Matrix sub_matrices_A[4];
         Matrix sub_matrices_B[4];
 
+        // Pad matrices if needed
+        pad_matrix(&A_result, A_result.rows, A_result.cols);
+        pad_matrix(&B_result, B_result.rows, B_result.cols);
+
         for (int i = 0; i < 4; i++)
         {
             sub_matrices_A[i] = matrix_partition(A_result, A_result.rows / 2, A_result.cols / 2, i);
@@ -192,6 +222,10 @@ void calculate_M2_M5(Matrix A1, Matrix A2, Matrix B11, Matrix *intermediate, int
         Matrix sub_matrices_A[4];
         Matrix sub_matrices_B[4];
 
+        // Pad matrices if needed
+        pad_matrix(&A_result, A_result.rows, A_result.cols);
+        pad_matrix(&B11, B11.rows, B11.cols);
+
         for (int i = 0; i < 4; i++)
         {
             sub_matrices_A[i] = matrix_partition(A_result, A_result.rows / 2, A_result.cols / 2, i);
@@ -252,6 +286,10 @@ void calculate_M3_M4(Matrix A1, Matrix B1, Matrix B2, Matrix *intermediate, int 
         // Further partition and push to stack
         Matrix sub_matrices_A[4];
         Matrix sub_matrices_B[4];
+
+        // Pad matrices if needed
+        pad_matrix(&A1, A1.rows, A1.cols);
+        pad_matrix(&B_result, B_result.rows, B_result.cols);
 
         for (int i = 0; i < 4; i++)
         {
@@ -317,6 +355,10 @@ void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *int
         // Further partition and push to stack
         Matrix sub_matrices_A[4];
         Matrix sub_matrices_B[4];
+
+        // Pad matrices if needed
+        pad_matrix(&A_result, A_result.rows, A_result.cols);
+        pad_matrix(&B_result, B_result.rows, B_result.cols);
 
         for (int i = 0; i < 4; i++)
         {

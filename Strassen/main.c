@@ -47,8 +47,11 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    // Build and pad matrices, col_a = row_b for multiplication
     Matrix input_matrix_A = matrix_build(input_buffer_A, dim1, dim2);
-    Matrix input_matrix_B = matrix_build(input_buffer_B, dim1, dim2);
+    Matrix input_matrix_B = matrix_build(input_buffer_B, dim2, dim1);
+    pad_matrix(&input_matrix_A, dim1, dim2);
+    pad_matrix(&input_matrix_B, dim2, dim1);
 
     Matrix partitioned_matrices_A[4];
     Matrix partitioned_matrices_B[4];
