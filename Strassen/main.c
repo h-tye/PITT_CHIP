@@ -57,6 +57,14 @@ int main(int argc, char **argv)
         }
         printf("\n");
     }
+    for (int i = 0; i < input_matrix_B.rows; i++)
+    {
+        for (int j = 0; j < input_matrix_B.cols; j++)
+        {
+            printf("%d ", input_matrix_B.matrix[i][j]);
+        }
+        printf("\n");
+    }
 
     Matrix partitioned_matrices_A[4];
     Matrix partitioned_matrices_B[4];

@@ -436,7 +436,7 @@ int calculate_intermediates(Matrix partitioned_matrices_A[4], Matrix partitioned
     calculate_M3_M4(partitioned_matrices_A[0], partitioned_matrices_B[1], partitioned_matrices_B[3], &intermediates[2], 2);
     calculate_M3_M4(partitioned_matrices_A[3], partitioned_matrices_B[2], partitioned_matrices_B[0], &intermediates[3], 3);
     calculate_M2_M5(partitioned_matrices_A[0], partitioned_matrices_A[1], partitioned_matrices_B[3], &intermediates[4], 4);
-    calculate_M6_M7(partitioned_matrices_A[1], partitioned_matrices_A[0], partitioned_matrices_B[0], partitioned_matrices_B[1], &intermediates[5], 5);
+    calculate_M6_M7(partitioned_matrices_A[2], partitioned_matrices_A[0], partitioned_matrices_B[0], partitioned_matrices_B[1], &intermediates[5], 5);
     calculate_M6_M7(partitioned_matrices_A[1], partitioned_matrices_A[3], partitioned_matrices_B[2], partitioned_matrices_B[3], &intermediates[6], 6);
 
     // Ensure all intermediates have been processed
