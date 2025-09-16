@@ -72,19 +72,19 @@ Matrix matrix_build(int *input_buffer, int dim1, int dim2)
     return mat;
 }
 
-void pad_matrix(Matrix *input_matrix, int rows, int cols)
+void pad_matrix(Matrix *input_matrix, int rows_A, int cols_A, int rows_B, int cols_B)
 {
     // Save actual dimensions
-    input_matrix->sig_r = rows;
-    input_matrix->sig_c = cols;
+    input_matrix->sig_r = rows_A;
+    input_matrix->sig_c = cols_A;
 
     // Dimensions must be a power of 2 for Strassen's algorithm
-    input_matrix->rows = (int)pow(2, ceil(log2(rows)));
-    input_matrix->cols = (int)pow(2, ceil(log2(cols)));
+    input_matrix->rows = (int)pow(2, ceil(log2((rows_A < rows_B) ? rows_B : rows_A)));
+    input_matrix->cols = (int)pow(2, ceil(log2((cols_A < cols_B) ? cols_B : cols_A)));
 
     // Allocate memory for the input_matrix->matrix
     input_matrix->matrix = (int **)realloc(input_matrix->matrix, input_matrix->rows * sizeof(int *));
-    for (int i = rows; i < input_matrix->rows; i++)
+    for (int i = rows_A; i < input_matrix->rows; i++)
     {
         input_matrix->matrix[i] = (int *)malloc(input_matrix->cols * sizeof(int));
     }
@@ -171,8 +171,8 @@ void calculate_M1(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *interm
         Matrix sub_matrices_B[4];
 
         // Pad matrices if needed
-        pad_matrix(&A_result, A_result.rows, A_result.cols);
-        pad_matrix(&B_result, B_result.rows, B_result.cols);
+        pad_matrix(&A_result, A_result.rows, A_result.cols, B_result.rows, B_result.cols);
+        pad_matrix(&B_result, B_result.rows, B_result.cols, A_result.rows, A_result.cols);
 
         for (int i = 0; i < 4; i++)
         {
@@ -234,8 +234,8 @@ void calculate_M2_M5(Matrix A1, Matrix A2, Matrix B11, Matrix *intermediate, int
         Matrix sub_matrices_B[4];
 
         // Pad matrices if needed
-        pad_matrix(&A_result, A_result.rows, A_result.cols);
-        pad_matrix(&B11, B11.rows, B11.cols);
+        pad_matrix(&A_result, A_result.rows, A_result.cols, B11.rows, B11.cols);
+        pad_matrix(&B11, B11.rows, B11.cols, A_result.rows, A_result.cols);
 
         for (int i = 0; i < 4; i++)
         {
@@ -296,8 +296,8 @@ void calculate_M3_M4(Matrix A1, Matrix B1, Matrix B2, Matrix *intermediate, int 
         Matrix sub_matrices_B[4];
 
         // Pad matrices if needed
-        pad_matrix(&A1, A1.rows, A1.cols);
-        pad_matrix(&B_result, B_result.rows, B_result.cols);
+        pad_matrix(&A1, A1.rows, A1.cols, B_result.rows, B_result.cols);
+        pad_matrix(&B_result, B_result.rows, B_result.cols, A1.rows, A1.cols);
 
         for (int i = 0; i < 4; i++)
         {
@@ -363,8 +363,8 @@ void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *int
         Matrix sub_matrices_B[4];
 
         // Pad matrices if needed
-        pad_matrix(&A_result, A_result.rows, A_result.cols);
-        pad_matrix(&B_result, B_result.rows, B_result.cols);
+        pad_matrix(&A_result, A_result.rows, A_result.cols, B_result.rows, B_result.cols);
+        pad_matrix(&B_result, B_result.rows, B_result.cols, A_result.rows, A_result.cols);
 
         for (int i = 0; i < 4; i++)
         {
