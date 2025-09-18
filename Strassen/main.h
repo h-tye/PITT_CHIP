@@ -10,23 +10,15 @@ typedef struct
     int processed; // Flag to indicate if this matrix has been processed
     int sig_r;     // Significant rows
     int sig_c;     // Significant columns
+    int level;     // Level in the recursion tree
 
 } Matrix;
 
-// NOT USED YET
-// typedef struct
-// {
-//     Matrix *stack;
-//     int size;
-// } MatrixStack;
-
-// void push(MatrixStack *stack, Matrix mat)
-// {
-//     // For simplicity, we won't implement dynamic resizing of the stack
-//     stack->stack = (Matrix *)realloc(stack->stack, sizeof(Matrix) * (stack->size + 1));
-//     stack->stack[stack->size] = mat;
-//     stack->size++;
-// }
+typedef struct
+{
+    Matrix **tree;
+    int size;
+} M_tree;
 
 void matrix_init(Matrix *mat, int rows, int cols, int num_matrices)
 {
@@ -106,12 +98,58 @@ void pad_matrix(Matrix *input_matrix, int rows_A, int cols_A, int rows_B, int co
     }
 }
 
-void matrix_partition(Matrix input_matrix, Matrix *sub_M, int new_rows, int new_cols)
+void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *sub_Ms, int recursion_levels)
+{
+
+    int total_sub_Ms = (int)pow(7, recursion_levels);
+    sub_Ms->size = total_sub_Ms;
+    sub_Ms->tree = (Matrix **)malloc(total_sub_Ms * sizeof(Matrix *));
+    for (int i = 0; i < total_sub_Ms; i++)
+    {
+        sub_Ms->tree[i] = (Matrix *)malloc(12 * sizeof(Matrix)); // Each node has 12 sub-matrices
+    }
+
+    // Start with the root node
+    int current_level = 0;
+    int nodes_in_current_level = 1;
+    int node_index = 0;
+
+    // Initialize the root node
+    matrix_partition(input_matrix_A, input_matrix_B, sub_Ms->tree[node_index], input_matrix_A.rows / 2, input_matrix_A.cols / 2);
+    node_index++;
+
+    while (current_level < recursion_levels)
+    {
+        int nodes_in_next_level = 0;
+
+        for (int i = 0; i < nodes_in_current_level; i++)
+        {
+            // For each node in the current level, create 7 child nodes
+            for (int j = 0; j < 7; j++)
+            {
+                if (node_index >= total_sub_Ms)
+                {
+                    break; // Prevent overflow
+                }
+
+                // Partition the matrices for the child node
+                matrix_partition(sub_Ms->tree[i][j], sub_Ms->tree[i][j + 1], sub_Ms->tree[node_index], sub_Ms->tree[i][j].rows / 2, sub_Ms->tree[i][j].cols / 2);
+                node_index++;
+                nodes_in_next_level++;
+            }
+        }
+
+        current_level++;
+        nodes_in_current_level = nodes_in_next_level;
+    }
+}
+
+void matrix_partition(Matrix input_matrix_A, Matrix input_matrix_B, Matrix *sub_M, int new_rows, int new_cols)
 {
 
     for (int i = 0; i < 12; i++)
     {
-        sub_M[i] = M_partition(input_matrix, new_rows, new_cols, i);
+        sub_M[i] = M_partition(((i % 2 == 0) ? input_matrix_A : input_matrix_B), new_rows, new_cols, i);
     }
 }
 

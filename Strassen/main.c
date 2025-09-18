@@ -66,14 +66,9 @@ int main(int argc, char **argv)
         printf("\n");
     }
 
-    Matrix partitioned_matrices_A[4];
-    Matrix partitioned_matrices_B[4];
-
-    for (int i = 0; i < 4; i++)
-    {
-        partitioned_matrices_A[i] = matrix_partition(input_matrix_A, input_matrix_A.rows / 2, input_matrix_A.cols / 2, i);
-        partitioned_matrices_B[i] = matrix_partition(input_matrix_B, input_matrix_B.rows / 2, input_matrix_B.cols / 2, i);
-    }
+    M_tree sub_Ms;
+    int recursion_levels = (int)log2((input_matrix_A.rows < input_matrix_B.rows) ? input_matrix_B.rows : input_matrix_A.rows);
+    partition(input_matrix_A, input_matrix_B, &sub_Ms, recursion_levels);
 
     Matrix result;
     result.rows = input_matrix_A.rows;
