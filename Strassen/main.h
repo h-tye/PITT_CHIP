@@ -106,7 +106,16 @@ void pad_matrix(Matrix *input_matrix, int rows_A, int cols_A, int rows_B, int co
     }
 }
 
-Matrix matrix_partition(Matrix input_matrix, int new_rows, int new_cols, int quadrant)
+void matrix_partition(Matrix input_matrix, Matrix *sub_M, int new_rows, int new_cols)
+{
+
+    for (int i = 0; i < 12; i++)
+    {
+        sub_M[i] = M_partition(input_matrix, new_rows, new_cols, i);
+    }
+}
+
+Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subindex)
 {
 
     Matrix part;
@@ -120,16 +129,88 @@ Matrix matrix_partition(Matrix input_matrix, int new_rows, int new_cols, int qua
         part.matrix[i] = (int *)malloc(new_cols * sizeof(int));
     }
 
-    // Populate new matrix based on quadrant
-    int row_offset = (quadrant / 2) * new_rows;
-    int col_offset = (quadrant % 2) * new_cols;
-
-    for (int i = 0; i < new_rows; i++)
+    switch (M_subindex)
     {
-        for (int j = 0; j < new_cols; j++)
+
+    case 0: // [A11 + A22]
+    case 1: // [B11 + B22]
+        for (int i = 0; i < new_rows; i++)
         {
-            part.matrix[i][j] = input_matrix.matrix[i + row_offset][j + col_offset];
+            for (int j = 0; j < new_cols; j++)
+            {
+                part.matrix[i][j] = input_matrix.matrix[i][j] + input_matrix.matrix[i + new_rows][j + new_cols];
+            }
         }
+        break;
+
+    case 2:  // [A21 + A22]
+    case 13: // [B21 + B22]
+        for (int i = 0; i < new_rows; i++)
+        {
+            for (int j = 0; j < new_cols; j++)
+            {
+                part.matrix[i][j] = input_matrix.matrix[i + new_rows][j] + input_matrix.matrix[i + new_rows][j + new_cols];
+            }
+        }
+        break;
+
+    case 3: // [B11]
+    case 4: // [A11]
+        for (int i = 0; i < new_rows; i++)
+        {
+            for (int j = 0; j < new_cols; j++)
+            {
+                part.matrix[i][j] = input_matrix.matrix[i][j];
+            }
+        }
+        break;
+
+    case 5:  // [B12 - B22]
+    case 12: // [A12 - A22]
+        for (int i = 0; i < new_rows; i++)
+        {
+            for (int j = 0; j < new_cols; j++)
+            {
+                part.matrix[i][j] = input_matrix.matrix[i][j + new_cols] - input_matrix.matrix[i + new_rows][j + new_cols];
+            }
+        }
+        break;
+
+    case 6: // [A22]
+    case 9: // [B22]
+        for (int i = 0; i < new_rows; i++)
+        {
+            for (int j = 0; j < new_cols; j++)
+            {
+                part.matrix[i][j] = input_matrix.matrix[i + new_rows][j + new_cols];
+            }
+        }
+        break;
+
+    case 7:  // [B21 - B11]
+    case 10: // [A21 - A11]
+        for (int i = 0; i < new_rows; i++)
+        {
+            for (int j = 0; j < new_cols; j++)
+            {
+                part.matrix[i][j] = input_matrix.matrix[i + new_rows][j] - input_matrix.matrix[i][j];
+            }
+        }
+        break;
+
+    case 8:  // [A12 + A11]
+    case 11: // [B12 + B11]
+        for (int i = 0; i < new_rows; i++)
+        {
+            for (int j = 0; j < new_cols; j++)
+            {
+                part.matrix[i][j] = input_matrix.matrix[i][j + new_cols] + input_matrix.matrix[i][j];
+            }
+        }
+        break;
+
+    default:
+        printf("Error: Invalid sub-matrix index %d\n", M_subindex);
     }
 
     return part;
