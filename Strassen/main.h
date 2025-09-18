@@ -11,6 +11,7 @@ typedef struct
     int sig_r;     // Significant rows
     int sig_c;     // Significant columns
     int level;     // Level in the recursion tree
+    int M_value;   // M1 to M7
 
 } Matrix;
 
@@ -18,6 +19,7 @@ typedef struct
 {
     Matrix **tree;
     int size;
+    int top_idx;
 } M_tree;
 
 void matrix_init(Matrix *mat, int rows, int cols, int num_matrices)
@@ -106,13 +108,14 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *sub_Ms, int
     sub_Ms->tree = (Matrix **)malloc(total_sub_Ms * sizeof(Matrix *));
     for (int i = 0; i < total_sub_Ms; i++)
     {
-        sub_Ms->tree[i] = (Matrix *)malloc(12 * sizeof(Matrix)); // Each node has 12 sub-matrices
+        sub_Ms->tree[i] = (Matrix *)malloc(14 * sizeof(Matrix)); // Each node has 14 sub-matrices
     }
 
     // Start with the root node
     int current_level = 0;
     int nodes_in_current_level = 1;
     int node_index = 0;
+    sub_Ms->top_idx = 0;
 
     // Initialize the root node
     matrix_partition(input_matrix_A, input_matrix_B, sub_Ms->tree[node_index], input_matrix_A.rows / 2, input_matrix_A.cols / 2);
@@ -124,7 +127,7 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *sub_Ms, int
 
         for (int i = 0; i < nodes_in_current_level; i++)
         {
-            // For each node in the current level, create 7 child nodes
+            // For each node in the current level, create 7 child nodes, where each node has 14 sub-matrices
             for (int j = 0; j < 7; j++)
             {
                 if (node_index >= total_sub_Ms)
@@ -138,6 +141,10 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *sub_Ms, int
                 nodes_in_next_level++;
             }
         }
+
+        // Then clear the parent node as we no longer need it
+        free(sub_Ms->tree[current_level]);
+        sub_Ms->top_idx = (int)pow(7, current_level) + 1 + sub_Ms->top_idx;
 
         current_level++;
         nodes_in_current_level = nodes_in_next_level;
@@ -159,6 +166,7 @@ Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subind
     Matrix part;
     part.rows = new_rows;
     part.cols = new_cols;
+    part.M_value = (M_subindex + 1) / 2;
 
     // Allocate memory for the partitioned matrix
     part.matrix = (int **)malloc(new_rows * sizeof(int *));
