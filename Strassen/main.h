@@ -100,66 +100,6 @@ void pad_matrix(Matrix *input_matrix, int rows_A, int cols_A, int rows_B, int co
     }
 }
 
-void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *sub_Ms, int recursion_levels)
-{
-
-    int total_sub_Ms = (int)pow(7, recursion_levels);
-    sub_Ms->size = total_sub_Ms;
-    sub_Ms->tree = (Matrix **)malloc(total_sub_Ms * sizeof(Matrix *));
-    for (int i = 0; i < total_sub_Ms; i++)
-    {
-        sub_Ms->tree[i] = (Matrix *)malloc(14 * sizeof(Matrix)); // Each node has 14 sub-matrices
-    }
-
-    // Start with the root node
-    int current_level = 0;
-    int nodes_in_current_level = 1;
-    int node_index = 0;
-    sub_Ms->top_idx = 0;
-
-    // Initialize the root node
-    matrix_partition(input_matrix_A, input_matrix_B, sub_Ms->tree[node_index], input_matrix_A.rows / 2, input_matrix_A.cols / 2);
-    node_index++;
-
-    while (current_level < recursion_levels)
-    {
-        int nodes_in_next_level = 0;
-
-        for (int i = 0; i < nodes_in_current_level; i++)
-        {
-            // For each node in the current level, create 7 child nodes, where each node has 14 sub-matrices
-            for (int j = 0; j < 7; j++)
-            {
-                if (node_index >= total_sub_Ms)
-                {
-                    break; // Prevent overflow
-                }
-
-                // Partition the matrices for the child node
-                matrix_partition(sub_Ms->tree[i][j], sub_Ms->tree[i][j + 1], sub_Ms->tree[node_index], sub_Ms->tree[i][j].rows / 2, sub_Ms->tree[i][j].cols / 2);
-                node_index++;
-                nodes_in_next_level++;
-            }
-        }
-
-        // Then clear the parent node as we no longer need it
-        free(sub_Ms->tree[current_level]);
-        sub_Ms->top_idx = (int)pow(7, current_level) + 1 + sub_Ms->top_idx;
-
-        current_level++;
-        nodes_in_current_level = nodes_in_next_level;
-    }
-}
-
-void matrix_partition(Matrix input_matrix_A, Matrix input_matrix_B, Matrix *sub_M, int new_rows, int new_cols)
-{
-
-    for (int i = 0; i < 12; i++)
-    {
-        sub_M[i] = M_partition(((i % 2 == 0) ? input_matrix_A : input_matrix_B), new_rows, new_cols, i);
-    }
-}
-
 Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subindex)
 {
 
@@ -262,264 +202,120 @@ Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subind
     return part;
 }
 
-// M1 = (A11 + A22) * (B11 + B22)
-void calculate_M1(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *intermediate)
+void matrix_partition(Matrix input_matrix_A, Matrix input_matrix_B, Matrix *sub_M, int new_rows, int new_cols)
 {
 
-    // First instantiate new matrices to hold the sums
-    Matrix A_result, B_result;
-    A_result.rows = A11.rows;
-    A_result.cols = A11.cols;
-    B_result.rows = B11.rows;
-    B_result.cols = B11.cols;
-    A_result.matrix = (int **)malloc(A_result.rows * sizeof(int *));
-    B_result.matrix = (int **)malloc(B_result.rows * sizeof(int *));
-    for (int i = 0; i < A_result.rows; i++)
+    for (int i = 0; i < 12; i++)
     {
-        A_result.matrix[i] = (int *)malloc(A_result.cols * sizeof(int));
-        B_result.matrix[i] = (int *)malloc(B_result.cols * sizeof(int));
+        sub_M[i] = M_partition(((i % 2 == 0) ? input_matrix_A : input_matrix_B), new_rows, new_cols, i);
     }
-
-    // Now perform the sums
-    for (int i = 0; i < A_result.rows; i++)
-    {
-        for (int j = 0; j < A_result.cols; j++)
-        {
-            A_result.matrix[i][j] = A11.matrix[i][j] + A22.matrix[i][j];
-            B_result.matrix[i][j] = B11.matrix[i][j] + B22.matrix[i][j];
-        }
-    }
-
-    // Check if further partitioning is needed
-    if (A_result.rows > 2 && A_result.cols > 2 && B_result.rows > 2 && B_result.cols > 2)
-    {
-        // Further partition and push to stack
-        Matrix sub_matrices_A[4];
-        Matrix sub_matrices_B[4];
-
-        // Pad matrices if needed
-        pad_matrix(&A_result, A_result.rows, A_result.cols, B_result.rows, B_result.cols);
-        pad_matrix(&B_result, B_result.rows, B_result.cols, A_result.rows, A_result.cols);
-
-        for (int i = 0; i < 4; i++)
-        {
-            sub_matrices_A[i] = matrix_partition(A_result, A_result.rows / 2, A_result.cols / 2, i);
-            sub_matrices_B[i] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
-        }
-
-        // Calculate M1 by using sub-matrices
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediate);
-    }
-    else
-    {
-        // Base case: perform standard multiplication
-
-        for (int i = 0; i < intermediate->rows; i++)
-        {
-            for (int j = 0; j < intermediate->cols; j++)
-            {
-                intermediate->matrix[i][j] = 0;
-                for (int k = 0; k < A_result.cols; k++)
-                {
-                    intermediate->matrix[i][j] += A_result.matrix[i][k] * B_result.matrix[k][j];
-                }
-            }
-        }
-    }
-
-    intermediate->processed = 1; // Mark as processed
 }
 
-// M2 = (A21 + A22) * B11, M5 = (A11 + A12) * B22
-void calculate_M2_M5(Matrix A1, Matrix A2, Matrix B11, Matrix *intermediate, int index)
+void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *sub_Ms, int recursion_levels)
 {
 
-    // First instantiate new matrices to hold the sums
-    Matrix A_result;
-    A_result.rows = A1.rows;
-    A_result.cols = A1.cols;
-    A_result.matrix = (int **)malloc(A_result.rows * sizeof(int *));
-    for (int i = 0; i < A_result.rows; i++)
+    int total_sub_Ms = (int)pow(7, recursion_levels);
+    sub_Ms->size = total_sub_Ms;
+    sub_Ms->tree = (Matrix **)malloc(total_sub_Ms * sizeof(Matrix *));
+    for (int i = 0; i < total_sub_Ms; i++)
     {
-        A_result.matrix[i] = (int *)malloc(A_result.cols * sizeof(int));
+        sub_Ms->tree[i] = (Matrix *)malloc(14 * sizeof(Matrix)); // Each node has 14 sub-matrices
     }
 
-    // Now perform the sums
-    for (int i = 0; i < A_result.rows; i++)
+    // Start with the root node
+    int current_level = 0;
+    int nodes_in_current_level = 1;
+    int node_index = 0;
+    sub_Ms->top_idx = 0;
+
+    // Initialize the root node
+    matrix_partition(input_matrix_A, input_matrix_B, sub_Ms->tree[node_index], input_matrix_A.rows / 2, input_matrix_A.cols / 2);
+    node_index++;
+
+    while (current_level < recursion_levels)
     {
-        for (int j = 0; j < A_result.cols; j++)
+        int nodes_in_next_level = 0;
+
+        for (int i = 0; i < nodes_in_current_level; i++)
         {
-            A_result.matrix[i][j] = A1.matrix[i][j] + A2.matrix[i][j];
-        }
-    }
-
-    // Check if further partitioning is needed
-    if (A_result.rows > 2 && A_result.cols > 2)
-    {
-        // Further partition and push to stack
-        Matrix sub_matrices_A[4];
-        Matrix sub_matrices_B[4];
-
-        // Pad matrices if needed
-        pad_matrix(&A_result, A_result.rows, A_result.cols, B11.rows, B11.cols);
-        pad_matrix(&B11, B11.rows, B11.cols, A_result.rows, A_result.cols);
-
-        for (int i = 0; i < 4; i++)
-        {
-            sub_matrices_A[i] = matrix_partition(A_result, A_result.rows / 2, A_result.cols / 2, i);
-            sub_matrices_B[i] = matrix_partition(B11, B11.rows / 2, B11.cols / 2, i);
-        }
-
-        // Recurse to calculate product for intermediate matrix
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediate);
-    }
-    else
-    {
-        // Base case: perform standard multiplication
-        for (int i = 0; i < intermediate->rows; i++)
-        {
-            for (int j = 0; j < intermediate->cols; j++)
+            // For each node in the current level, create 7 child nodes, where each node has 14 sub-matrices
+            for (int j = 0; j < 7; j++)
             {
-                intermediate->matrix[i][j] = 0;
-                for (int k = 0; k < A_result.cols; k++)
+                if (node_index >= total_sub_Ms)
                 {
-                    intermediate->matrix[i][j] += A_result.matrix[i][k] * B11.matrix[k][j];
+                    break; // Prevent overflow
                 }
+
+                // Partition the matrices for the child node
+                matrix_partition(sub_Ms->tree[i][j], sub_Ms->tree[i][j + 1], sub_Ms->tree[node_index], sub_Ms->tree[i][j].rows / 2, sub_Ms->tree[i][j].cols / 2);
+                node_index++;
+                nodes_in_next_level++;
             }
         }
-    }
 
-    intermediate->processed = 1; // Mark as processed
+        // Then clear the parent node as we no longer need it
+        free(sub_Ms->tree[current_level]);
+        sub_Ms->top_idx = (int)pow(7, current_level) + 1 + sub_Ms->top_idx;
+
+        current_level++;
+        nodes_in_current_level = nodes_in_next_level;
+    }
 }
 
-// M3 = A11 * (B12 - B22),  M4 = A22 * (B21 - B11)
-void calculate_M3_M4(Matrix A1, Matrix B1, Matrix B2, Matrix *intermediate, int index)
+void compute_M(Matrix *sub_M, int M_index)
 {
+    Matrix A = sub_M[M_index * 2];     // First matrix for M1 to M7
+    Matrix B = sub_M[M_index * 2 + 1]; // Second matrix for M1 to M7
+    Matrix M_temp;
+    M_temp.rows = A.rows;
+    M_temp.cols = B.cols;
 
-    // First instantiate new matrices to hold the sums
-    Matrix B_result;
-    B_result.rows = B1.rows;
-    B_result.cols = B2.cols;
-    B_result.matrix = (int **)malloc(B_result.rows * sizeof(int *));
-    for (int i = 0; i < B_result.rows; i++)
+    // Allocate memory for the result matrix
+    M_temp.matrix = (int **)malloc(M_temp.rows * sizeof(int *));
+    for (int i = 0; i < M_temp.rows; i++)
     {
-        B_result.matrix[i] = (int *)malloc(B_result.cols * sizeof(int));
+        M_temp.matrix[i] = (int *)malloc(M_temp.cols * sizeof(int));
     }
 
-    // Now perform the sums
-    for (int i = 0; i < B_result.rows; i++)
+    // Perform standard matrix multiplication on A and B
+    for (int i = 0; i < M_temp.rows; i++)
     {
-        for (int j = 0; j < B_result.cols; j++)
+        for (int j = 0; j < M_temp.cols; j++)
         {
-            B_result.matrix[i][j] = B1.matrix[i][j] - B2.matrix[i][j];
-        }
-    }
-
-    // Check if further partitioning is needed
-    if (B_result.rows > 2 && B_result.cols > 2)
-    {
-        // Further partition and push to stack
-        Matrix sub_matrices_A[4];
-        Matrix sub_matrices_B[4];
-
-        // Pad matrices if needed
-        pad_matrix(&A1, A1.rows, A1.cols, B_result.rows, B_result.cols);
-        pad_matrix(&B_result, B_result.rows, B_result.cols, A1.rows, A1.cols);
-
-        for (int i = 0; i < 4; i++)
-        {
-            sub_matrices_A[i] = matrix_partition(A1, A1.rows / 2, A1.cols / 2, i);
-            sub_matrices_B[i] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
-        }
-
-        // Recurse to calculate product for intermediate matrix
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediate);
-    }
-    else
-    {
-        // Base case: perform standard multiplication
-
-        for (int i = 0; i < intermediate->rows; i++)
-        {
-            for (int j = 0; j < intermediate->cols; j++)
+            M_temp.matrix[i][j] = 0; // Initialize the cell
+            for (int k = 0; k < A.cols; k++)
             {
-                intermediate->matrix[i][j] = 0;
-                for (int k = 0; k < A1.cols; k++)
-                {
-                    intermediate->matrix[i][j] += A1.matrix[i][k] * B_result.matrix[k][j];
-                }
+                M_temp.matrix[i][j] += A.matrix[i][k] * B.matrix[k][j];
             }
         }
     }
 
-    intermediate->processed = 1; // Mark as processed
+    // Store M_temp in A to reuse memory
+    sub_M[M_index * 2].matrix = M_temp.matrix;
+    free(sub_M[M_index * 2 + 1].matrix);
+    free(M_temp.matrix);
 }
 
-// M6 = (A21 - A11) * (B11 + B12), M7 = (A12 - A22) * (B21 + B22)
-void calculate_M6_M7(Matrix A11, Matrix A22, Matrix B11, Matrix B22, Matrix *intermediate, int index)
+void compute(M_tree *sub_Ms, Matrix *result, int recursion_levels)
 {
-    // First instantiate new matrices to hold the sums
-    Matrix A_result, B_result;
-    A_result.rows = A11.rows;
-    A_result.cols = A11.cols;
-    B_result.rows = B11.rows;
-    B_result.cols = B11.cols;
-    A_result.matrix = (int **)malloc(A_result.rows * sizeof(int *));
-    B_result.matrix = (int **)malloc(B_result.rows * sizeof(int *));
-    for (int i = 0; i < A_result.rows; i++)
-    {
-        A_result.matrix[i] = (int *)malloc(A_result.cols * sizeof(int));
-        B_result.matrix[i] = (int *)malloc(B_result.cols * sizeof(int));
-    }
+    int current_level = recursion_levels;
+    int nodes_in_current_level = (int)pow(7, recursion_levels);
 
-    // Now perform the sums
-    for (int i = 0; i < A_result.rows; i++)
+    while (current_level >= 0)
     {
-        for (int j = 0; j < A_result.cols; j++)
+
+        for (int i = 0; i < nodes_in_current_level; i++)
         {
-            A_result.matrix[i][j] = A11.matrix[i][j] - A22.matrix[i][j];
-            B_result.matrix[i][j] = B11.matrix[i][j] + B22.matrix[i][j];
-        }
-    }
-
-    // Check if further partitioning is needed
-    if (A_result.rows > 2 && A_result.cols > 2 && B_result.rows > 2 && B_result.cols > 2)
-    {
-        // Further partition and push to stack
-        Matrix sub_matrices_A[4];
-        Matrix sub_matrices_B[4];
-
-        // Pad matrices if needed
-        pad_matrix(&A_result, A_result.rows, A_result.cols, B_result.rows, B_result.cols);
-        pad_matrix(&B_result, B_result.rows, B_result.cols, A_result.rows, A_result.cols);
-
-        for (int i = 0; i < 4; i++)
-        {
-            sub_matrices_A[i] = matrix_partition(A_result, A_result.rows / 2, A_result.cols / 2, i);
-            sub_matrices_B[i] = matrix_partition(B_result, B_result.rows / 2, B_result.cols / 2, i);
-        }
-
-        // Recurse to calculate product for intermediate matrix
-        calculate_intermediates(sub_matrices_A, sub_matrices_B, intermediate);
-    }
-    else
-    {
-        // Base case: perform standard multiplication
-
-        for (int i = 0; i < intermediate->rows; i++)
-        {
-            for (int j = 0; j < intermediate->cols; j++)
+            // For each node in the current level, create 7 child nodes, where each node has 14 sub-matrices
+            for (int j = 0; j < 7; j++)
             {
-                intermediate->matrix[i][j] = 0;
-                for (int k = 0; k < A_result.cols; k++)
-                {
-                    intermediate->matrix[i][j] += A_result.matrix[i][k] * B_result.matrix[k][j];
-                }
+                compute_M(sub_Ms->tree[sub_Ms->top_idx + i], j);
             }
         }
-    }
 
-    intermediate->processed = 1; // Mark as processed
+        current_level--;
+        nodes_in_current_level = (int)pow(7, current_level);
+    }
 }
 
 void calculate_product(Matrix intermediates[7], Matrix *result, int dim1, int dim2)
@@ -548,46 +344,4 @@ void calculate_product(Matrix intermediates[7], Matrix *result, int dim1, int di
             }
         }
     }
-}
-
-int calculate_intermediates(Matrix partitioned_matrices_A[4], Matrix partitioned_matrices_B[4], Matrix *result)
-{
-
-    // Initialize intermediates
-    Matrix intermediates[7];
-    matrix_init(intermediates, partitioned_matrices_A[0].rows, partitioned_matrices_B[0].cols, 7);
-
-    // Compute intermediates
-    calculate_M1(partitioned_matrices_A[0], partitioned_matrices_A[3], partitioned_matrices_B[0], partitioned_matrices_B[3], &intermediates[0]);
-    calculate_M2_M5(partitioned_matrices_A[2], partitioned_matrices_A[3], partitioned_matrices_B[0], &intermediates[1], 1);
-    calculate_M3_M4(partitioned_matrices_A[0], partitioned_matrices_B[1], partitioned_matrices_B[3], &intermediates[2], 2);
-    calculate_M3_M4(partitioned_matrices_A[3], partitioned_matrices_B[2], partitioned_matrices_B[0], &intermediates[3], 3);
-    calculate_M2_M5(partitioned_matrices_A[0], partitioned_matrices_A[1], partitioned_matrices_B[3], &intermediates[4], 4);
-    calculate_M6_M7(partitioned_matrices_A[2], partitioned_matrices_A[0], partitioned_matrices_B[0], partitioned_matrices_B[1], &intermediates[5], 5);
-    calculate_M6_M7(partitioned_matrices_A[1], partitioned_matrices_A[3], partitioned_matrices_B[2], partitioned_matrices_B[3], &intermediates[6], 6);
-
-    // Ensure all intermediates have been processed
-    for (int i = 0; i < 7; i++)
-    {
-        if (!intermediates[i].processed)
-        {
-            // Raise error
-            printf("Error: Intermediate matrix M%d not processed.\n", i + 1);
-            return -1; // Indicate error
-        }
-    }
-
-    // Once all intermediates are computed, compute the product
-    calculate_product(intermediates, result, partitioned_matrices_A[0].rows, partitioned_matrices_B[0].cols);
-
-    // Print the result matrix
-    for (int i = 0; i < result->rows; i++)
-    {
-        for (int j = 0; j < result->cols; j++)
-        {
-            printf("Row: %d Col: %d Value: %d\n", i, j, result->matrix[i][j]);
-        }
-    }
-
-    return 0; // Indicate success
 }

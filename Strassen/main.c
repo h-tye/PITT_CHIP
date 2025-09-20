@@ -78,7 +78,7 @@ int main(int argc, char **argv)
     {
         result.matrix[i] = (int *)malloc(result.cols * sizeof(int));
     }
-    calculate_intermediates(partitioned_matrices_A, partitioned_matrices_B, &result);
+    compute(&sub_Ms, &result, recursion_levels);
 
     free(input_buffer_A);
     free(input_buffer_B);
