@@ -17,7 +17,7 @@ typedef struct
 
 typedef struct
 {
-    Matrix *sub_ms;
+    Matrix sub_ms[14]; // 14 sub-matrices for each node
     int size;
 
 } Node;
@@ -210,62 +210,42 @@ Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subind
     return part;
 }
 
-void matrix_partition(Matrix input_matrix_A, Matrix input_matrix_B, Node *sub_M, int new_rows, int new_cols)
+void matrix_partition(Node current_node, Node *child_node, int new_rows, int new_cols,int M_idx)
 {
-    for (int i = 0; i < 12; i++)
+    for (int sub_mat_idx = 0; sub_mat_idx < 14; sub_mat_idx++)
     {
-        sub_M->sub_ms[i] = M_partition(((i % 2 == 0) ? input_matrix_A : input_matrix_B), new_rows, new_cols, i);
+        child_node->sub_ms[sub_mat_idx] = M_partition(current_node.sub_ms[M_idx + (sub_mat_idx % 2)], new_rows, new_cols, sub_mat_idx);
     }
 }
 
-void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *sub_Ms, int recursion_levels)
+void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, int recursion_levels)
 {
 
-    int total_sub_Ms = (int)pow(7, recursion_levels);
-    sub_Ms->size = total_sub_Ms;
-    sub_Ms->tree = (Node *)malloc(total_sub_Ms * sizeof(Node));
-    for (int i = 0; i < total_sub_Ms; i++)
-    {
-        sub_Ms->tree[i].sub_ms = (Matrix *)malloc(14 * sizeof(Matrix)); // Each node has 14 sub-matrices
-    }
+    int total_nodes = (int)pow(7, recursion_levels); // Total number of nodes on bottom level
+    int total_sub_Ms = total_nodes * 14;             // Each node has 14 sub-matrices
+    node_tree->size = total_nodes;
+    node_tree->tree = (Node *)malloc(total_nodes * sizeof(Node));
 
     // Start with the root node
     int current_level = 0;
     int nodes_in_current_level = 1;
     int node_index = 0;
-    sub_Ms->top_idx = 0;
+    node_tree->top_idx = 0;
+    Matrix matrix_above = input_matrix_A;
 
-    // Initialize the root node
-    matrix_partition(input_matrix_A, input_matrix_B, &sub_Ms->tree[node_index], input_matrix_A.rows / 2, input_matrix_A.cols / 2);
-    node_index++;
-
-    while (current_level < recursion_levels)
+    while (current_level <= recursion_levels)
     {
-        int nodes_in_next_level = 0;
+        int level_rows = matrix_above.rows / (int)pow(2, current_level + 1);
+        int level_cols = matrix_above.cols / (int)pow(2, current_level + 1);
 
-        for (int i = 0; i < nodes_in_current_level; i++)
+        for (int node = 0; node < nodes_in_current_level; node++)
         {
-            // For each node in the current level, create 7 child nodes, where each node has 14 sub-matrices
-            for (int j = 0; j < 7; j++)
-            {
-                if (node_index >= total_sub_Ms)
-                {
-                    break; // Prevent overflow
-                }
+            for(int m = 0; m < 7; m++){
 
-                // Partition the matrices for the child node
-                matrix_partition(sub_Ms->tree[i].sub_ms[j], sub_Ms->tree[i].sub_ms[j + 1], &sub_Ms->tree[node_index], sub_Ms->tree[i].sub_ms[j].rows / 2, sub_Ms->tree[i].sub_ms[j].cols / 2);
-                node_index++;
-                nodes_in_next_level++;
+                int child_idx = node_tree->top_idx + nodes_in_current_level + (m * nodes_in_current_level) + node;
+                matrix_partition(node_tree->tree[node_tree->top_idx + node], &node_tree->tree[child_idx], level_rows, level_cols,m*2);
             }
         }
-
-        // Then clear the parent node as we no longer need it
-        free(sub_Ms->tree[current_level].sub_ms);
-        sub_Ms->top_idx = (int)pow(7, current_level) + 1 + sub_Ms->top_idx;
-
-        current_level++;
-        nodes_in_current_level = nodes_in_next_level;
     }
 }
 
