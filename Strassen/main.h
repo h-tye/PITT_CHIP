@@ -210,7 +210,7 @@ Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subind
     return part;
 }
 
-void matrix_partition(Node current_node, Node *child_node, int new_rows, int new_cols,int M_idx)
+void matrix_partition(Node current_node, Node *child_node, int new_rows, int new_cols, int M_idx)
 {
     for (int sub_mat_idx = 0; sub_mat_idx < 14; sub_mat_idx++)
     {
@@ -240,60 +240,12 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, 
 
         for (int node = 0; node < nodes_in_current_level; node++)
         {
-            for(int m = 0; m < 7; m++){
+            for (int m = 0; m < 7; m++)
+            {
 
                 int child_idx = node_tree->top_idx + nodes_in_current_level + (m * nodes_in_current_level) + node;
-                matrix_partition(node_tree->tree[node_tree->top_idx + node], &node_tree->tree[child_idx], level_rows, level_cols,m*2);
+                matrix_partition(node_tree->tree[node_tree->top_idx + node], &node_tree->tree[child_idx], level_rows, level_cols, m * 2);
             }
-        }
-    }
-}
-
-void compute_M(Matrix *sub_M, int M_index)
-{
-    Matrix A = sub_M[M_index * 2];     // First matrix for M1 to M7
-    Matrix B = sub_M[M_index * 2 + 1]; // Second matrix for M1 to M7
-    Matrix M_temp;
-    M_temp.rows = A.rows;
-    M_temp.cols = B.cols;
-
-    // Allocate memory for the result matrix
-    M_temp.matrix = (int **)malloc(M_temp.rows * sizeof(int *));
-    for (int i = 0; i < M_temp.rows; i++)
-    {
-        M_temp.matrix[i] = (int *)malloc(M_temp.cols * sizeof(int));
-    }
-
-    // Perform standard matrix multiplication on A and B
-    for (int i = 0; i < M_temp.rows; i++)
-    {
-        for (int j = 0; j < M_temp.cols; j++)
-        {
-            M_temp.matrix[i][j] = 0; // Initialize the cell
-            for (int k = 0; k < A.cols; k++)
-            {
-                M_temp.matrix[i][j] += A.matrix[i][k] * B.matrix[k][j];
-            }
-        }
-    }
-
-    // Store M_temp in A to reuse memory
-    sub_M[M_index * 2].matrix = M_temp.matrix;
-    free(sub_M[M_index * 2 + 1].matrix);
-    free(M_temp.matrix);
-}
-
-void compute_base(M_tree *sub_Ms, Matrix *result, int recursion_levels)
-{
-    int current_level = recursion_levels;
-    int nodes_in_current_level = (int)pow(7, recursion_levels);
-
-    for (int i = 0; i < nodes_in_current_level; i++)
-    {
-        // For each node in the current level, create 7 child nodes, where each node has 14 sub-matrices
-        for (int j = 0; j < 7; j++)
-        {
-            compute_M(sub_Ms->tree[sub_Ms->top_idx + i].sub_ms, j);
         }
     }
 }
@@ -326,26 +278,60 @@ void calculate_product(Matrix intermediates[7], Matrix *result, int dim1, int di
     }
 }
 
-void compute_result(M_tree *sub_Ms, Matrix *result, int recursion_levels)
+void matrix_mult(Matrix *A, Matrix *B, Matrix *C)
 {
-    int current_level = recursion_levels;
-    int nodes_in_current_level = (int)pow(7, recursion_levels);
 
-    while (current_level >= 0)
+    int **temp_matrix = (int **)malloc(A->rows * sizeof(int *));
+    for (int i = 0; i < A->rows; i++)
     {
-        for (int i = 0; i < nodes_in_current_level; i++)
+        temp_matrix[i] = (int *)malloc(B->cols * sizeof(int));
+        for (int j = 0; j < B->cols; j++)
         {
-            Matrix intermediates[7];
-            for (int j = 0; j < 7; j++)
-            {
-                intermediates[j] = sub_Ms->tree[sub_Ms->top_idx + i][j * 2]; // M1 to M7 are stored in even indices
-            }
-
-            // Calculate product and store result
-            calculate_product(intermediates, sub_Ms->tree[sub_Ms->top_idx + i], result->rows, result->cols);
+            temp_matrix[i][j] = 0; // Initialize to zero
         }
+    }
 
-        current_level--;
-        nodes_in_current_level /= 7;
+    for (int i = 0; i < A->rows; i++)
+    {
+        for (int j = 0; j < B->cols; j++)
+        {
+            for (int k = 0; k < A->cols; k++)
+            {
+                temp_matrix[i][j] += A->matrix[i][k] * B->matrix[k][j];
+            }
+        }
+    }
+
+    // Copy the result to C
+    for (int i = 0; i < A->rows; i++)
+    {
+        for (int j = 0; j < B->cols; j++)
+        {
+            C->matrix[i][j] = temp_matrix[i][j];
+        }
+    }
+
+    // Free temporary matrix
+    for (int i = 0; i < A->rows; i++)
+    {
+        free(temp_matrix[i]);
+    }
+    free(temp_matrix);
+}
+
+void compute_base(M_tree *tree)
+{
+
+    // Iterate through full bottom layer of sub_ms
+    for (int node = 0; node < tree->size; node++)
+    {
+
+        // Iterate through matrices within each node to form bottom layers Ms
+        for (int m = 0; m < 7; m++)
+        {
+
+            // Store result in same node, in idx % 7
+            matrix_mult(&tree->tree[node].sub_ms[m * 2], &tree->tree[node].sub_ms[(m * 2) + 1], &tree->tree[node].sub_ms[m * 2]);
+        }
     }
 }
