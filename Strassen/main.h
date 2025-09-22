@@ -327,11 +327,42 @@ void compute_base(M_tree *tree)
     {
 
         // Iterate through matrices within each node to form bottom layers Ms
+        Matrix intermediates[7];
         for (int m = 0; m < 7; m++)
         {
-
             // Store result in same node, in idx % 7
             matrix_mult(&tree->tree[node].sub_ms[m * 2], &tree->tree[node].sub_ms[(m * 2) + 1], &tree->tree[node].sub_ms[m * 2]);
+            intermediates[m] = tree->tree[node].sub_ms[m * 2];
         }
+
+        // Calculate final product matrix for this node and store in head matrix
+        calculate_product(intermediates, &tree->tree[node].sub_ms[0], tree->tree[node].sub_ms[0].rows, tree->tree[node].sub_ms[0].cols);
+    }
+}
+
+void compute_result(M_tree *tree, Matrix *result, int levels)
+{
+
+    int nodes_in_current_level = tree->size;
+    int level_offset = 1;
+
+    while (nodes_in_current_level > 1)
+    {
+
+        Matrix intermediates[7];
+        // Iterate through full current layer of Ms
+        for (int node = 0; node < nodes_in_current_level; node += 7)
+        {
+            for (int m = 0; m < 7; m++)
+            {
+                intermediates[m] = tree->tree[node + (m * level_offset)].sub_ms[0];
+            }
+
+            // Calculate final product matrix for this node and store in head matrix
+            calculate_product(intermediates, &tree->tree[node].sub_ms[0], tree->tree[node].sub_ms[0].rows, tree->tree[node].sub_ms[0].cols);
+        }
+
+        nodes_in_current_level /= 7;
+        level_offset *= 7;
     }
 }
