@@ -78,7 +78,7 @@ int main(int argc, char **argv)
     {
         result.matrix[i] = (int *)malloc(result.cols * sizeof(int));
     }
-    compute(&sub_Ms, &result, recursion_levels);
+    compute_result(&sub_Ms, &result, recursion_levels);
 
     free(input_buffer_A);
     free(input_buffer_B);
