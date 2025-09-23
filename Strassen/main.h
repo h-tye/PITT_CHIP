@@ -218,11 +218,24 @@ void matrix_partition(Node current_node, Node *child_node, int new_rows, int new
     }
 }
 
+void destroy_node(Node *node)
+{
+    for (int i = 0; i < 14; i++)
+    {
+        for (int j = 0; j < node->sub_ms[i].rows; j++)
+        {
+            free(node->sub_ms[i].matrix[j]);
+        }
+        free(node->sub_ms[i].matrix);
+    }
+    node->size = 0;
+}
+
 void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, int recursion_levels)
 {
 
-    int total_nodes = (int)pow(7, (recursion_levels - 1)) + 1; // Total number of nodes on bottom level
-    int total_sub_Ms = total_nodes * 14;                       // Each node has 14 sub-matrices
+    int total_nodes = (int)pow(7, (recursion_levels - 1)); // Total number of nodes on bottom level
+    int total_sub_Ms = total_nodes * 14;                   // Each node has 14 sub-matrices
     node_tree->size = total_nodes;
     node_tree->tree = (Node *)malloc(total_nodes * sizeof(Node));
     for (int i = 0; i < total_nodes; i++)
@@ -257,6 +270,11 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, 
                 int child_idx = node_tree->top_idx + nodes_in_current_level + (m * nodes_in_current_level) + node;
                 matrix_partition(node_tree->tree[node_tree->top_idx + node], &node_tree->tree[child_idx], level_rows, level_cols, m * 2);
             }
+
+            // Destroy parent node to free memory
+            destroy_node(&node_tree->tree[node_tree->top_idx + node]);
+            node_tree->size--;
+            node_tree->top_idx++;
         }
     }
 }
