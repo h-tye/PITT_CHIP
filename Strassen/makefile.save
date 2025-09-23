@@ -3,7 +3,7 @@ CC = gcc
 #define comipler flags
 CFLAGS = -std=c11 -Wall -fmax-errors=10 -Wextra
 # define library paths in addition to /usr/lib
-LFLAGS = -lm
+LFLAGS =
 # define libraries to use
 LIBS =
 # define the object files that this project needs
@@ -14,17 +14,13 @@ MAIN = program
 all: $(MAIN)
 
 $(MAIN): $(OBJFILES)
-	$(CC) $(CFLAGS) -o $(MAIN) $(OBJFILES) $(LFLAGS)
+	$(CC) $(CFLAGS) -o $(MAIN) $(OBJFILES)
 	
 %.o: %.c
-	$(CC) $(CFLAGS) -c -o $@ $<
-# $@ means left of : and $< means right of :
+	$(CC) $(CFLAGS) -c -o $@ $# $@ means left of : and $< means right of :
 	
 clean:
 	rm -f $(OBJFILES) $(MAIN)
 
 launch: $(MAIN)
 	./$(MAIN)
-
-mem: $(MAIN)
-	valgrind ./$(MAIN) 10 10
