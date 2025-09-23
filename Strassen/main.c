@@ -67,9 +67,7 @@ int main(int argc, char **argv)
     }
 
     M_tree sub_Ms;
-    int recursion_levels = (int)log2((input_matrix_A.rows < input_matrix_B.rows) ? input_matrix_B.rows : input_matrix_A.rows);
-    partition(input_matrix_A, input_matrix_B, &sub_Ms, recursion_levels);
-
+    int recursion_levels = (int)log2((input_matrix_A.rows < input_matrix_B.rows) ? input_matrix_B.rows : input_matrix_A.rows) - 1;
     Matrix result;
     result.rows = input_matrix_A.rows;
     result.cols = input_matrix_B.cols;
@@ -78,7 +76,9 @@ int main(int argc, char **argv)
     {
         result.matrix[i] = (int *)malloc(result.cols * sizeof(int));
     }
-    compute(&sub_Ms, &result, recursion_levels);
+    partition(input_matrix_A, input_matrix_B, &sub_Ms, recursion_levels);
+    compute_base(&sub_Ms);
+    compute_result(&sub_Ms, &result, recursion_levels);
 
     free(input_buffer_A);
     free(input_buffer_B);
