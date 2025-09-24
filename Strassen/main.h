@@ -117,8 +117,9 @@ Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subind
     part.M_value = (M_subindex + 1) / 2;
 
     // Allocate memory for the partitioned matrix
-    part.matrix = (int **)malloc((new_rows + 1) * sizeof(int *));
-    for (int i = 0; i < (new_rows + 1); i++)
+    int first_matrix_resize = (M_subindex == 0) ? 2 : 1;
+    part.matrix = (int **)malloc((part.rows * first_matrix_resize) * sizeof(int *));
+    for (int i = 0; i < (part.rows * first_matrix_resize); i++)
     {
         part.matrix[i] = (int *)malloc((new_cols + 1) * sizeof(int));
     }
@@ -238,10 +239,6 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, 
     int total_sub_Ms = total_nodes * 14;                   // Each node has 14 sub-matrices
     node_tree->size = total_nodes;
     node_tree->tree = (Node *)malloc(total_nodes * sizeof(Node));
-    for (int i = 0; i < total_nodes; i++)
-    {
-        matrix_init(node_tree->tree[i].sub_ms, input_matrix_A.rows / (int)pow(2, recursion_levels), input_matrix_A.cols / (int)pow(2, recursion_levels), 14);
-    }
 
     // Start with the root node
     int current_level = 0;
@@ -283,28 +280,36 @@ void calculate_product(Matrix intermediates[7], Matrix *result, int dim1, int di
 {
 
     // Fill the result matrix using the intermediates
-    for (int i = 0; i < result->rows; i++)
+    for (int i = 0; i < dim1; i++)
     {
-        for (int j = 0; j < result->cols; j++)
+        for (int j = 0; j < dim2; j++)
         {
-            if (i < result->rows / 2 && j < result->cols / 2) // C11 = M1 + M4 - M5 + M7
+            if (i < dim1 / 2 && j < dim2 / 2) // C11 = M1 + M4 - M5 + M7
             {
                 result->matrix[i][j] = intermediates[0].matrix[i][j] + intermediates[3].matrix[i][j] - intermediates[4].matrix[i][j] + intermediates[6].matrix[i][j];
             }
-            else if (i < result->rows / 2 && j >= result->cols / 2) // C12 = M3 + M5
+            else if (i < dim1 / 2 && j >= dim2 / 2) // C12 = M3 + M5
             {
-                result->matrix[i][j] = intermediates[2].matrix[i][j - result->cols / 2] + intermediates[4].matrix[i][j - result->cols / 2];
+                result->matrix[i][j] = intermediates[2].matrix[i][j - dim2 / 2] + intermediates[4].matrix[i][j - dim2 / 2];
             }
-            else if (i >= result->rows / 2 && j < result->cols / 2) // C21 = M2 + M4
+            else if (i >= dim1 / 2 && j < dim2 / 2) // C21 = M2 + M4
             {
-                result->matrix[i][j] = intermediates[1].matrix[i - result->rows / 2][j] + intermediates[3].matrix[i - result->rows / 2][j];
+
+                // Debug
+                int temp1 = result->matrix[i][j];
+                int temp2 = intermediates[1].matrix[i - dim1 / 2][j];
+                int temp3 = intermediates[3].matrix[i - dim1 / 2][j];
+                result->matrix[i][j] = intermediates[1].matrix[i - dim1 / 2][j] + intermediates[3].matrix[i - dim1 / 2][j];
             }
             else // C22 = M1 - M2 + M3 + M6
             {
-                result->matrix[i][j] = intermediates[0].matrix[i - result->rows / 2][j - result->cols / 2] - intermediates[1].matrix[i - result->rows / 2][j - result->cols / 2] + intermediates[2].matrix[i - result->rows / 2][j - result->cols / 2] + intermediates[5].matrix[i - result->rows / 2][j - result->cols / 2];
+                result->matrix[i][j] = intermediates[0].matrix[i - dim1 / 2][j - dim2 / 2] - intermediates[1].matrix[i - dim1 / 2][j - dim2 / 2] + intermediates[2].matrix[i - dim1 / 2][j - dim2 / 2] + intermediates[5].matrix[i - dim1 / 2][j - dim2 / 2];
             }
         }
     }
+
+    result->rows = dim1;
+    result->cols = dim2;
 }
 
 void matrix_mult(Matrix *A, Matrix *B, Matrix *C)
@@ -365,7 +370,7 @@ void compute_base(M_tree *tree)
         }
 
         // Calculate final product matrix for this node and store in head matrix
-        calculate_product(intermediates, &tree->tree[node].sub_ms[0], tree->tree[node].sub_ms[0].rows, tree->tree[node].sub_ms[0].cols);
+        calculate_product(intermediates, &tree->tree[node].sub_ms[0], tree->tree[node].sub_ms[0].rows * 2, tree->tree[node].sub_ms[0].cols * 2);
     }
 }
 
@@ -388,10 +393,19 @@ void compute_result(M_tree *tree, Matrix *result, int levels)
             }
 
             // Calculate final product matrix for this node and store in head matrix
-            calculate_product(intermediates, &tree->tree[node].sub_ms[0], tree->tree[node].sub_ms[0].rows, tree->tree[node].sub_ms[0].cols);
+            calculate_product(intermediates, &tree->tree[node].sub_ms[0], tree->tree[node].sub_ms[0].rows * 2, tree->tree[node].sub_ms[0].cols * 2);
         }
 
         nodes_in_current_level /= 7;
         level_offset *= 7;
+    }
+
+    // Copy the final result to the result matrix
+    for (int i = 0; i < result->rows; i++)
+    {
+        for (int j = 0; j < result->cols; j++)
+        {
+            result->matrix[i][j] = tree->tree[0].sub_ms[0].matrix[i][j];
+        }
     }
 }

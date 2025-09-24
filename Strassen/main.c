@@ -80,6 +80,16 @@ int main(int argc, char **argv)
     compute_base(&sub_Ms);
     compute_result(&sub_Ms, &result, recursion_levels);
 
+    // Print result matrix
+    printf("Resultant Matrix:\n");
+    for (int i = 0; i < dim1; i++)
+    {
+        for (int j = 0; j < dim1; j++)
+        {
+            printf("Row %d Col %d: %d\n", i, j, result.matrix[i][j]);
+        }
+    }
+
     free(input_buffer_A);
     free(input_buffer_B);
     free(result.matrix);
