@@ -108,21 +108,21 @@ void pad_matrix(Matrix *input_matrix, int rows_A, int cols_A, int rows_B, int co
     }
 }
 
-Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subindex)
+void M_partition(Matrix input_matrix, Matrix *output_matrix, int new_rows, int new_cols, int M_subindex)
 {
 
-    Matrix part;
-    int result_matrix_resize = (M_subindex == 1) ? 2 : 1; // Store result matrix in M1b, this will become empty once M1 is calculated
-    part.rows = new_rows;
-    part.cols = new_cols;
-    part.M_value = (M_subindex + 1) / 2;
+    // Matrix part;
+    // int result_matrix_resize = (M_subindex == 1) ? 2 : 1; // Store result matrix in M1b, this will become empty once M1 is calculated
+    // part.rows = new_rows;
+    // part.cols = new_cols;
+    // part.M_value = (M_subindex + 1) / 2;
 
     // Allocate memory to store the sub-matrix
-    part.matrix = (int **)malloc((part.rows * result_matrix_resize) * sizeof(int *));
-    for (int i = 0; i < (part.rows * result_matrix_resize); i++)
-    {
-        part.matrix[i] = (int *)malloc((part.cols * result_matrix_resize) * sizeof(int));
-    }
+    // part.matrix = (int **)malloc((part.rows * result_matrix_resize) * sizeof(int *));
+    // for (int i = 0; i < (part.rows * result_matrix_resize); i++)
+    // {
+    //     part.matrix[i] = (int *)malloc((part.cols * result_matrix_resize) * sizeof(int));
+    // }
 
     switch (M_subindex)
     {
@@ -133,7 +133,7 @@ Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subind
         {
             for (int j = 0; j < (new_cols); j++)
             {
-                part.matrix[i][j] = input_matrix.matrix[i][j] + input_matrix.matrix[i + new_rows][j + new_cols];
+                output_matrix->matrix[i][j] = input_matrix.matrix[i][j] + input_matrix.matrix[i + new_rows][j + new_cols];
             }
         }
         break;
@@ -144,7 +144,7 @@ Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subind
         {
             for (int j = 0; j < (new_cols); j++)
             {
-                part.matrix[i][j] = input_matrix.matrix[i + new_rows][j] + input_matrix.matrix[i + new_rows][j + new_cols];
+                output_matrix->matrix[i][j] = input_matrix.matrix[i + new_rows][j] + input_matrix.matrix[i + new_rows][j + new_cols];
             }
         }
         break;
@@ -155,7 +155,7 @@ Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subind
         {
             for (int j = 0; j < (new_cols); j++)
             {
-                part.matrix[i][j] = input_matrix.matrix[i][j];
+                output_matrix->matrix[i][j] = input_matrix.matrix[i][j];
             }
         }
         break;
@@ -166,7 +166,7 @@ Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subind
         {
             for (int j = 0; j < (new_cols); j++)
             {
-                part.matrix[i][j] = input_matrix.matrix[i][j + new_cols] - input_matrix.matrix[i + new_rows][j + new_cols];
+                output_matrix->matrix[i][j] = input_matrix.matrix[i][j + new_cols] - input_matrix.matrix[i + new_rows][j + new_cols];
             }
         }
         break;
@@ -177,7 +177,7 @@ Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subind
         {
             for (int j = 0; j < (new_cols); j++)
             {
-                part.matrix[i][j] = input_matrix.matrix[i + new_rows][j + new_cols];
+                output_matrix->matrix[i][j] = input_matrix.matrix[i + new_rows][j + new_cols];
             }
         }
         break;
@@ -188,7 +188,7 @@ Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subind
         {
             for (int j = 0; j < (new_cols); j++)
             {
-                part.matrix[i][j] = input_matrix.matrix[i + new_rows][j] - input_matrix.matrix[i][j];
+                output_matrix->matrix[i][j] = input_matrix.matrix[i + new_rows][j] - input_matrix.matrix[i][j];
             }
         }
         break;
@@ -199,7 +199,7 @@ Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subind
         {
             for (int j = 0; j < (new_cols); j++)
             {
-                part.matrix[i][j] = input_matrix.matrix[i][j + new_cols] + input_matrix.matrix[i][j];
+                output_matrix->matrix[i][j] = input_matrix.matrix[i][j + new_cols] + input_matrix.matrix[i][j];
             }
         }
         break;
@@ -207,15 +207,13 @@ Matrix M_partition(Matrix input_matrix, int new_rows, int new_cols, int M_subind
     default:
         printf("Error: Invalid sub-matrix index %d\n", M_subindex);
     }
-
-    return part;
 }
 
 void matrix_partition(Node current_node, Node *child_node, int new_rows, int new_cols, int M_idx)
 {
     for (int sub_mat_idx = 0; sub_mat_idx < 14; sub_mat_idx++)
     {
-        child_node->sub_ms[sub_mat_idx] = M_partition(current_node.sub_ms[M_idx + (sub_mat_idx % 2)], new_rows, new_cols, sub_mat_idx);
+        M_partition(current_node.sub_ms[M_idx + (sub_mat_idx % 2)], &child_node->sub_ms[sub_mat_idx], new_rows, new_cols, sub_mat_idx);
     }
 }
 
@@ -226,8 +224,10 @@ void destroy_node(Node *node)
         for (int j = 0; j < node->sub_ms[i].rows; j++)
         {
             free(node->sub_ms[i].matrix[j]);
+            node->sub_ms[i].matrix[j] = NULL;
         }
         free(node->sub_ms[i].matrix);
+        node->sub_ms[i].matrix = NULL;
     }
     node->size = 0;
 }
@@ -235,10 +235,13 @@ void destroy_node(Node *node)
 void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, int recursion_levels)
 {
 
-    int total_nodes = (int)pow(7, (recursion_levels - 1)); // Total number of nodes on bottom level
-    int total_sub_Ms = total_nodes * 14;                   // Each node has 14 sub-matrices
-    node_tree->size = total_nodes;
+    int total_nodes = (int)pow(7, (recursion_levels - 1)) + 1; // Total number of nodes on bottom level
+    int total_sub_Ms = total_nodes * 14;                       // Each node has 14 sub-matrices
     node_tree->tree = (Node *)malloc(total_nodes * sizeof(Node));
+    for (int i = 0; i < total_nodes; i++)
+    {
+        matrix_init(node_tree->tree[i].sub_ms, input_matrix_A.rows, input_matrix_A.cols, 14);
+    }
 
     // Start with the root node
     int current_level = 0;
@@ -249,15 +252,16 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, 
     // Initialize the root node with the input matrices
     for (int m = 0; m < 14; m++)
     {
-        node_tree->tree[0].sub_ms[m] = M_partition(((m % 2 == 0) ? input_matrix_A : input_matrix_B), (input_matrix_A.rows / 2), (input_matrix_A.cols / 2), m);
+        M_partition(((m % 2 == 0) ? input_matrix_A : input_matrix_B), &node_tree->tree[0].sub_ms[m], (input_matrix_A.rows / 2), (input_matrix_A.cols / 2), m);
     }
+    node_tree->size = 1;
     current_level++;
 
     Matrix matrix_above = node_tree->tree[0].sub_ms[0];
     while (current_level < recursion_levels)
     {
-        int level_rows = matrix_above.rows / (int)pow(2, current_level + 1);
-        int level_cols = matrix_above.cols / (int)pow(2, current_level + 1);
+        int level_rows = matrix_above.rows / 2;
+        int level_cols = matrix_above.cols / 2;
 
         for (int node = 0; node < nodes_in_current_level; node++)
         {
@@ -266,6 +270,7 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, 
 
                 int child_idx = node_tree->top_idx + nodes_in_current_level + (m * nodes_in_current_level) + node;
                 matrix_partition(node_tree->tree[node_tree->top_idx + node], &node_tree->tree[child_idx], level_rows, level_cols, m * 2);
+                node_tree->size++;
             }
 
             // Destroy parent node to free memory
@@ -273,6 +278,10 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, 
             node_tree->size--;
             node_tree->top_idx++;
         }
+
+        nodes_in_current_level *= 7;
+        current_level++;
+        matrix_above = node_tree->tree[node_tree->top_idx].sub_ms[0];
     }
 }
 
@@ -298,12 +307,6 @@ void calculate_product(Matrix intermediates[7], Matrix *result, int dim1, int di
             }
             else // C22 = M1 - M2 + M3 + M6
             {
-                // Debug
-                int temp1 = intermediates[0].matrix[i - dim1 / 2][j - dim2 / 2];
-                int temp2 = intermediates[1].matrix[i - dim1 / 2][j - dim2 / 2];
-                int temp3 = intermediates[2].matrix[i - dim1 / 2][j - dim2 / 2];
-                int temp4 = intermediates[5].matrix[i - dim1 / 2][j - dim2 / 2];
-                int temp5 = temp1 - temp2 + temp3 + temp4;
                 result->matrix[i][j] = intermediates[0].matrix[i - dim1 / 2][j - dim2 / 2] - intermediates[1].matrix[i - dim1 / 2][j - dim2 / 2] + intermediates[2].matrix[i - dim1 / 2][j - dim2 / 2] + intermediates[5].matrix[i - dim1 / 2][j - dim2 / 2];
             }
         }
