@@ -110,19 +110,9 @@ void pad_matrix(Matrix *input_matrix, int rows_A, int cols_A, int rows_B, int co
 
 void M_partition(Matrix input_matrix, Matrix *output_matrix, int new_rows, int new_cols, int M_subindex)
 {
-
-    // Matrix part;
-    // int result_matrix_resize = (M_subindex == 1) ? 2 : 1; // Store result matrix in M1b, this will become empty once M1 is calculated
-    // part.rows = new_rows;
-    // part.cols = new_cols;
-    // part.M_value = (M_subindex + 1) / 2;
-
-    // Allocate memory to store the sub-matrix
-    // part.matrix = (int **)malloc((part.rows * result_matrix_resize) * sizeof(int *));
-    // for (int i = 0; i < (part.rows * result_matrix_resize); i++)
-    // {
-    //     part.matrix[i] = (int *)malloc((part.cols * result_matrix_resize) * sizeof(int));
-    // }
+    // Need to update row/col info
+    output_matrix->rows = new_rows;
+    output_matrix->cols = new_cols;
 
     switch (M_subindex)
     {
@@ -361,7 +351,7 @@ void compute_base(M_tree *tree)
 {
 
     // Iterate through full bottom layer of sub_ms
-    for (int node = 0; node < tree->size; node++)
+    for (int node = tree->top_idx; node < tree->size + tree->top_idx; node++)
     {
 
         // Iterate through matrices within each node to form bottom layers Ms
