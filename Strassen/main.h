@@ -384,11 +384,11 @@ void compute_result(M_tree *tree, Matrix *result, int levels)
 
         Matrix intermediates[7];
         // Iterate through full current layer of Ms
-        for (int node = 0; node < nodes_in_above_level; node += 7)
+        for (int node = 0; node < nodes_in_above_level; node++)
         {
             for (int m = 0; m < 7; m++)
             {
-                intermediates[m] = tree->tree[tree->top_idx + node + m].sub_ms[1];
+                intermediates[m] = tree->tree[tree->top_idx + (node * 7) + m].sub_ms[1];
             }
 
             // Calculate final product matrix for this node and store in head matrix
