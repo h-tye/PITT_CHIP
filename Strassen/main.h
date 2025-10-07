@@ -228,8 +228,8 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, 
 
     int total_nodes = (int)pow(7, (recursion_levels - 1)) + 1; // Total number of nodes on bottom level
     int total_sub_Ms = total_nodes * 14;                       // Each node has 14 sub-matrices
-    node_tree->tree = (Node *)malloc(total_nodes * sizeof(Node));
-    for (int i = 0; i < total_nodes; i++)
+    node_tree->tree = (Node *)malloc(2 * total_nodes * sizeof(Node));
+    for (int i = 0; i < total_nodes * 2; i++)
     {
         matrix_init(node_tree->tree[i].sub_ms, input_matrix_A.rows, input_matrix_A.cols, 14);
     }
@@ -259,7 +259,7 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, 
             for (int m = 0; m < 7; m++)
             {
 
-                int child_idx = node_tree->top_idx + nodes_in_current_level + (m * nodes_in_current_level) + node;
+                int child_idx = node_tree->top_idx + nodes_in_current_level + (7 * node) + m;
                 matrix_partition(node_tree->tree[node_tree->top_idx + node], &node_tree->tree[child_idx], level_rows, level_cols, m * 2);
                 node_tree->size++;
             }
