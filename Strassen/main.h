@@ -259,13 +259,13 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, 
             for (int m = 0; m < 7; m++)
             {
 
-                int child_idx = node_tree->top_idx + nodes_in_current_level + (7 * node) + m;
+                int child_idx = node_tree->top_idx + (nodes_in_current_level - node) + (7 * node) + m;
                 matrix_partition(node_tree->tree[node_tree->top_idx + node], &node_tree->tree[child_idx], level_rows, level_cols, m * 2);
                 node_tree->size++;
             }
 
             // Destroy parent node to free memory
-            destroy_node(&node_tree->tree[node_tree->top_idx + node]);
+            destroy_node(&node_tree->tree[node_tree->top_idx]);
             node_tree->size--;
             node_tree->top_idx++;
         }
