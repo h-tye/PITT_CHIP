@@ -30,8 +30,8 @@ int main(int argc, char **argv)
     printf("Dim check : %d\n", dim1 * dim2);
     for (i = 0; i < (dim1 * dim2); i++)
     {
-        input_buffer_A[i] = 0;
-        input_buffer_B[i] = 0;
+        input_buffer_A[i] = i; // Fill with alternating 1s and 0s
+        input_buffer_B[i] = i; // Fill with alternating 0s and 1s
     }
 
     if (input_buffer_A == NULL || input_buffer_B == NULL)
@@ -49,22 +49,22 @@ int main(int argc, char **argv)
     pad_matrix(&input_matrix_B, dim2, dim1, dim1, dim2);
 
     // Print matrices for debugging
-    for (int i = 0; i < input_matrix_A.rows; i++)
-    {
-        for (int j = 0; j < input_matrix_A.cols; j++)
-        {
-            printf("%d ", input_matrix_A.matrix[i][j]);
-        }
-        printf("\n");
-    }
-    for (int i = 0; i < input_matrix_B.rows; i++)
-    {
-        for (int j = 0; j < input_matrix_B.cols; j++)
-        {
-            printf("%d ", input_matrix_B.matrix[i][j]);
-        }
-        printf("\n");
-    }
+    // for (int i = 0; i < input_matrix_A.rows; i++)
+    // {
+    //     for (int j = 0; j < input_matrix_A.cols; j++)
+    //     {
+    //         printf("%d ", input_matrix_A.matrix[i][j]);
+    //     }
+    //     printf("\n");
+    // }
+    // for (int i = 0; i < input_matrix_B.rows; i++)
+    // {
+    //     for (int j = 0; j < input_matrix_B.cols; j++)
+    //     {
+    //         printf("%d ", input_matrix_B.matrix[i][j]);
+    //     }
+    //     printf("\n");
+    // }
 
     M_tree sub_Ms;
     int recursion_levels = (int)log2((input_matrix_A.rows < input_matrix_B.rows) ? input_matrix_B.rows : input_matrix_A.rows) - 1;
