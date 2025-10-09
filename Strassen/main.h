@@ -114,6 +114,15 @@ void M_partition(Matrix input_matrix, Matrix *output_matrix, int new_rows, int n
     output_matrix->rows = new_rows;
     output_matrix->cols = new_cols;
 
+    // Debug
+    // for (int i = 0; i < new_rows; i++)
+    // {
+    //     for (int j = 0; j < new_cols; j++)
+    //     {
+    //         printf("M_partition: input_matrix[%d][%d] = %d\n", i, j, input_matrix.matrix[i][j]);
+    //     }
+    // }
+
     switch (M_subindex)
     {
 
@@ -260,7 +269,9 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, 
             {
 
                 int child_idx = node_tree->top_idx + (nodes_in_current_level - node) + (7 * node) + m;
-                matrix_partition(node_tree->tree[node_tree->top_idx + node], &node_tree->tree[child_idx], level_rows, level_cols, m * 2);
+                Node temp = node_tree->tree[node_tree->top_idx];
+                matrix_partition(node_tree->tree[node_tree->top_idx], &node_tree->tree[child_idx], level_rows, level_cols, m * 2);
+                Node temp1 = node_tree->tree[child_idx];
                 node_tree->size++;
             }
 
@@ -366,6 +377,17 @@ void compute_base(M_tree *tree)
             // Store result in same node, in idx % 7
             matrix_mult(&tree->tree[node].sub_ms[m * 2], &tree->tree[node].sub_ms[(m * 2) + 1], &tree->tree[node].sub_ms[m * 2]);
             intermediates[m] = tree->tree[node].sub_ms[m * 2];
+            // Debug check
+            for (int i = 0; i < intermediates[m].rows; i++)
+            {
+                for (int j = 0; j < intermediates[m].cols; j++)
+                {
+                    if (intermediates[m].matrix[i][j] < 0)
+                    {
+                        printf("Error: Negative value in node %d intermediate M%d at [%d][%d]: %d\n", node, m + 1, i, j, intermediates[m].matrix[i][j]);
+                    }
+                }
+            }
         }
 
         // Calculate final product matrix for this node and store in head matrix

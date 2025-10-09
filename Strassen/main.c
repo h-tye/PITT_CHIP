@@ -30,8 +30,8 @@ int main(int argc, char **argv)
     printf("Dim check : %d\n", dim1 * dim2);
     for (i = 0; i < (dim1 * dim2); i++)
     {
-        input_buffer_A[i] = i;                 // Sequential values
-        input_buffer_B[i] = (dim1 * dim2) - i; // Reverse sequential values
+        input_buffer_A[i] = 0;
+        input_buffer_B[i] = 0;
     }
 
     if (input_buffer_A == NULL || input_buffer_B == NULL)
