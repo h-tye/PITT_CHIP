@@ -49,6 +49,10 @@ void matrix_init(Matrix *mat, int rows, int cols, int num_matrices)
     }
 }
 
+/**
+ * Build a 2D matrix from a 1D input buffer
+ * This is not needed, just more convenient for testing/visualization
+ */
 Matrix matrix_build(int *input_buffer, int dim1, int dim2)
 {
     Matrix mat;
@@ -74,6 +78,11 @@ Matrix matrix_build(int *input_buffer, int dim1, int dim2)
     return mat;
 }
 
+/**
+ * Pad a matrix to the next power of 2 dimensions
+ * Strassen algorithm requires matrices to be of size 2^n x 2^n
+ * Room for optimizations
+ */
 void pad_matrix(Matrix *input_matrix, int rows_A, int cols_A, int rows_B, int cols_B)
 {
     // Save actual dimensions
@@ -108,6 +117,11 @@ void pad_matrix(Matrix *input_matrix, int rows_A, int cols_A, int rows_B, int co
     }
 }
 
+/**
+ * Lowest level parition function
+ * Takes in a matrix and outputs a sub-matrix based on the M index
+ * Designed to avoid having to create many temporary matrices for A11, A12, etc.
+ */
 void M_partition(Matrix input_matrix, Matrix *output_matrix, int new_rows, int new_cols, int M_subindex)
 {
     // Need to update row/col info
@@ -123,11 +137,12 @@ void M_partition(Matrix input_matrix, Matrix *output_matrix, int new_rows, int n
     //     }
     // }
 
+    // See strassen algorithm slides for formulas
     switch (M_subindex)
     {
 
-    case 0: // [A11 + A22]
-    case 1: // [B11 + B22]
+    case 0: // [A11 + A22] = M1a
+    case 1: // [B11 + B22] = M1b
         for (int i = 0; i < (new_rows); i++)
         {
             for (int j = 0; j < (new_cols); j++)
@@ -138,8 +153,8 @@ void M_partition(Matrix input_matrix, Matrix *output_matrix, int new_rows, int n
         }
         break;
 
-    case 2:  // [A21 + A22]
-    case 13: // [B21 + B22]
+    case 2:  // [A21 + A22] = M2a
+    case 13: // [B21 + B22] = M7b
         for (int i = 0; i < (new_rows); i++)
         {
             for (int j = 0; j < (new_cols); j++)
@@ -149,8 +164,8 @@ void M_partition(Matrix input_matrix, Matrix *output_matrix, int new_rows, int n
         }
         break;
 
-    case 3: // [B11]
-    case 4: // [A11]
+    case 3: // [B11] = M2b
+    case 4: // [A11] = M3a
         for (int i = 0; i < (new_rows); i++)
         {
             for (int j = 0; j < (new_cols); j++)
@@ -160,8 +175,8 @@ void M_partition(Matrix input_matrix, Matrix *output_matrix, int new_rows, int n
         }
         break;
 
-    case 5:  // [B12 - B22]
-    case 12: // [A12 - A22]
+    case 5:  // [B12 - B22] = M3b
+    case 12: // [A12 - A22] = M7a
         for (int i = 0; i < (new_rows); i++)
         {
             for (int j = 0; j < (new_cols); j++)
@@ -171,8 +186,8 @@ void M_partition(Matrix input_matrix, Matrix *output_matrix, int new_rows, int n
         }
         break;
 
-    case 6: // [A22]
-    case 9: // [B22]
+    case 6: // [A22] = M4a
+    case 9: // [B22] = M5b
         for (int i = 0; i < (new_rows); i++)
         {
             for (int j = 0; j < (new_cols); j++)
@@ -182,8 +197,8 @@ void M_partition(Matrix input_matrix, Matrix *output_matrix, int new_rows, int n
         }
         break;
 
-    case 7:  // [B21 - B11]
-    case 10: // [A21 - A11]
+    case 7:  // [B21 - B11] = M4b
+    case 10: // [A21 - A11] = M6a
         for (int i = 0; i < (new_rows); i++)
         {
             for (int j = 0; j < (new_cols); j++)
@@ -193,8 +208,8 @@ void M_partition(Matrix input_matrix, Matrix *output_matrix, int new_rows, int n
         }
         break;
 
-    case 8:  // [A12 + A11]
-    case 11: // [B12 + B11]
+    case 8:  // [A12 + A11] = M5a
+    case 11: // [B12 + B11] = M6b
         for (int i = 0; i < (new_rows); i++)
         {
             for (int j = 0; j < (new_cols); j++)
@@ -209,14 +224,25 @@ void M_partition(Matrix input_matrix, Matrix *output_matrix, int new_rows, int n
     }
 }
 
+/**
+ * Partitions the matrices for a given node into its child nodes
+ * Each node has 14 sub-matrices, 2 adjacent sub-matrices will then form the child node
+ * E.g. M1a and M1b of node above will form a new child node with 14 sub matrices
+ * See strassen algorithm slides for more details
+ */
 void matrix_partition(Node current_node, Node *child_node, int new_rows, int new_cols, int M_idx)
 {
+    // Want to create 14 new sub-matrices for the child node
     for (int sub_mat_idx = 0; sub_mat_idx < 14; sub_mat_idx++)
     {
+        // Pull MXa or MXb from parent node to form new sub-matrix
         M_partition(current_node.sub_ms[M_idx + (sub_mat_idx % 2)], &child_node->sub_ms[sub_mat_idx], new_rows, new_cols, sub_mat_idx);
     }
 }
 
+/**
+ * Free memory allocated for a node's sub-matrices
+ */
 void destroy_node(Node *node)
 {
     for (int i = 0; i < 14; i++)
@@ -232,10 +258,13 @@ void destroy_node(Node *node)
     node->size = 0;
 }
 
-void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, int recursion_levels)
+/**
+ * Partition input matrices into 2x2 sub-matrices
+ */
+void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, int partition_levels)
 {
 
-    int total_nodes = (int)pow(7, (recursion_levels - 1)) + 1; // Total number of nodes on bottom level
+    int total_nodes = (int)pow(7, (partition_levels - 1)) + 1; // Total number of nodes on bottom level
     int total_sub_Ms = total_nodes * 14;                       // Each node has 14 sub-matrices
     node_tree->tree = (Node *)malloc(2 * total_nodes * sizeof(Node));
     for (int i = 0; i < total_nodes * 2; i++)
@@ -249,7 +278,7 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, 
     int node_index = 0;
     node_tree->top_idx = 0;
 
-    // Initialize the root node with the input matrices
+    // Initialize the root node by partitioning the input matrices
     for (int m = 0; m < 14; m++)
     {
         M_partition(((m % 2 == 0) ? input_matrix_A : input_matrix_B), &node_tree->tree[0].sub_ms[m], (input_matrix_A.rows / 2), (input_matrix_A.cols / 2), m);
@@ -258,20 +287,17 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, 
     current_level++;
 
     Matrix matrix_above = node_tree->tree[0].sub_ms[0];
-    while (current_level < recursion_levels)
+    for (; current_level < partition_levels; current_level++) // Iterate for partition levels number of times
     {
-        int level_rows = matrix_above.rows / 2;
+        int level_rows = matrix_above.rows / 2; // Update dimensions for next level
         int level_cols = matrix_above.cols / 2;
 
-        for (int node = 0; node < nodes_in_current_level; node++)
+        for (int node = 0; node < nodes_in_current_level; node++) // Iterate through all nodes in current level
         {
-            for (int m = 0; m < 7; m++)
+            for (int m = 0; m < 7; m++) // For each node, create 7 child nodes
             {
-
                 int child_idx = node_tree->top_idx + (nodes_in_current_level - node) + (7 * node) + m;
-                // Node temp = node_tree->tree[node_tree->top_idx];
                 matrix_partition(node_tree->tree[node_tree->top_idx], &node_tree->tree[child_idx], level_rows, level_cols, m * 2);
-                // Node temp1 = node_tree->tree[child_idx];
                 node_tree->size++;
             }
 
@@ -282,11 +308,13 @@ void partition(Matrix input_matrix_A, Matrix input_matrix_B, M_tree *node_tree, 
         }
 
         nodes_in_current_level *= 7;
-        current_level++;
         matrix_above = node_tree->tree[node_tree->top_idx].sub_ms[0];
     }
 }
 
+/***
+ * Helper function to caluclate final product via intermediates
+ */
 void calculate_product(Matrix intermediates[7], Matrix *result, int dim1, int dim2)
 {
 
@@ -321,6 +349,9 @@ void calculate_product(Matrix intermediates[7], Matrix *result, int dim1, int di
     result->cols = dim2;
 }
 
+/**
+ * Standard matrix multiplication for base case
+ */
 void matrix_mult(Matrix *A, Matrix *B, Matrix *C)
 {
 
@@ -363,6 +394,9 @@ void matrix_mult(Matrix *A, Matrix *B, Matrix *C)
     free(temp_matrix);
 }
 
+/**
+ * Compute the base case multiplications of the 2x2 sub-matrices
+ */
 void compute_base(M_tree *tree)
 {
 
@@ -384,6 +418,9 @@ void compute_base(M_tree *tree)
     }
 }
 
+/**
+ * Compute the final result matrix from the computed Ms
+ */
 void compute_result(M_tree *tree, Matrix *result, int levels)
 {
 

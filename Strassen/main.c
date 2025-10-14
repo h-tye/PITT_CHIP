@@ -8,6 +8,7 @@
 
 int main(int argc, char **argv)
 {
+    // Error control
     if (argc != 3)
     {
         fprintf(stderr, "Usage: %s <dim1_rows> <dim2_cols>\n", argv[0]);
@@ -23,6 +24,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    // Input buffers, these are just for testing, in hardware we will stream in values
     int *input_buffer_A = (int *)malloc(dim1 * dim2 * sizeof(int));
     int *input_buffer_B = (int *)malloc(dim1 * dim2 * sizeof(int));
     int i = 0;
@@ -30,8 +32,8 @@ int main(int argc, char **argv)
     printf("Dim check : %d\n", dim1 * dim2);
     for (i = 0; i < (dim1 * dim2); i++)
     {
-        input_buffer_A[i] = i; // Fill with alternating 1s and 0s
-        input_buffer_B[i] = i; // Fill with alternating 0s and 1s
+        input_buffer_A[i] = i; // Fill bufffers with test values
+        input_buffer_B[i] = i; 
     }
 
     if (input_buffer_A == NULL || input_buffer_B == NULL)
@@ -67,7 +69,7 @@ int main(int argc, char **argv)
     // }
 
     M_tree sub_Ms;
-    int recursion_levels = (int)log2((input_matrix_A.rows < input_matrix_B.rows) ? input_matrix_B.rows : input_matrix_A.rows) - 1;
+    int partition_levels = (int)log2((input_matrix_A.rows < input_matrix_B.rows) ? input_matrix_B.rows : input_matrix_A.rows) - 1;
     Matrix result;
     result.rows = input_matrix_A.rows;
     result.cols = input_matrix_B.cols;
@@ -76,9 +78,11 @@ int main(int argc, char **argv)
     {
         result.matrix[i] = (int *)malloc(result.cols * sizeof(int));
     }
-    partition(input_matrix_A, input_matrix_B, &sub_Ms, recursion_levels);
+
+    // Partition, compute, and get result
+    partition(input_matrix_A, input_matrix_B, &sub_Ms, partition_levels);
     compute_base(&sub_Ms);
-    compute_result(&sub_Ms, &result, recursion_levels);
+    compute_result(&sub_Ms, &result, partition_levels);
 
     // Print result matrix
     printf("Resultant Matrix:\n");
