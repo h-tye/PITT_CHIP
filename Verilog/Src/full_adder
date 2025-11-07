@@ -1,0 +1,33 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 11/04/2025 12:05:57 PM
+// Design Name: 
+// Module Name: full_adder
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+
+module full_adder(
+    input wire A,
+    input wire B,
+    input wire Cin,
+    output wire S,
+    output wire Cout
+    );
+    
+    assign S = A ^ B ^ Cin;
+    assign Cout = (A & B) | (Cin & A) | (Cin & B);
+endmodule
