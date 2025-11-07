@@ -1,0 +1,61 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 11/07/2025 11:56:06 AM
+// Design Name: 
+// Module Name: RCS
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+
+module RCS #(
+    parameter width = 0
+)(
+    input [width-1:0] A,
+    input [width-1:0] B,
+    output [width-1:0] S,
+    output BorOut
+    );
+    
+    wire borrows[width-2:0];
+    
+    // INSTANTIATE FIRST AND LAST
+    full_subber U_F(
+        .A(A[0]),
+        .B(B[0]),
+        .BorIn(1'b0),
+        .S(S[0]),
+        .BorOut(borrows[0]));
+        
+    full_subber U_L(
+        .A(A[width-1]),
+        .B(B[width-1]),
+        .BorIn(borrows[width-2]),
+        .S(S[width-1]),
+        .BorOut(BorOut));
+        
+    genvar i;
+    generate
+        for(i = 1; i < width - 1; i = i + 1) begin : FS_STAGE
+            full_subber U(
+                .A(A[i]),
+                .B(B[i]),
+                .BorIn(borrows[i-1]),
+                .S(S[i]),
+                .BorOut(borrows[i]));
+         end
+    endgenerate
+        
+endmodule
