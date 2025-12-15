@@ -403,7 +403,7 @@ void compute_base(M_tree *tree)
     // Iterate through full bottom layer of sub_ms
     for (int node = tree->top_idx; node < tree->size + tree->top_idx; node++)
     {
-
+ 
         // Iterate through matrices within each node to form bottom layers Ms
         Matrix intermediates[7];
         for (int m = 0; m < 7; m++)
