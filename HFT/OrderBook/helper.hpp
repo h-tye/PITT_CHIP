@@ -23,9 +23,6 @@
 #include <thread>
 #include <chrono>
 
-// This code is based off of implementation by thecodingjesus - https://www.youtube.com/watch?v=XeLWe0Cx_Lg&t=896s
-
-// Order types
 enum class OrderType
 {
     GoodTillCancel, // Limit Order that remains until canceled or filled
@@ -35,41 +32,26 @@ enum class OrderType
     GoodForDay      // Good for day order - remains active until the end of the trading day
 };
 
-// Order sides
 enum class Side
 {
     Buy,
     Sell
 };
 
-struct Constants
+enum class Action
 {
-    static const Price INVALID_PRICE = -1;
+    Add,
+    Cancel,
+    Modify,
+    Execute,
+    Null
 };
 
-// Structure to hold level information in the order book
-struct LevelInfo
-{
-    Price price;
-    Quantity quantity;
-};
-
-class OrderBookLevelInfos
-{
-public:
-    OrderBookLevelInfos(const LevelInfos &bids, const LevelInfos &asks)
-        : bids_{bids},
-          asks_{asks}
-    {
-    }
-
-    const LevelInfos &getBids() const { return bids_; }
-    const LevelInfos &getAsks() const { return asks_; }
-
-private:
-    LevelInfos bids_;
-    LevelInfos asks_;
-};
+using Price = std::int32_t;
+using Quantity = std::uint32_t;
+using OrderId = std::uint64_t;
+using OrderIds = std::vector<OrderId>;
+using Timestamp = std::uint64_t;
 
 class Order
 {
@@ -78,20 +60,24 @@ public:
     Order(OrderId id, Side side, Quantity quantity, OrderType type)
         : id_{id},
           side_{side},
-          price_{Constants::INVALID_PRICE},
+          price_{-1},
+          action_{Action::Null},
           initialQuantity_{quantity},
           remainingQuantity_{quantity},
-          type_{type}
+          type_{type},
+          timestamp_{static_cast<Timestamp>(std::time(nullptr))}
     {
     }
 
-    Order(OrderId id, Side side, Price price, Quantity quantity, OrderType type)
+    Order(OrderId id, Side side, Price price, Quantity quantity, OrderType type, Action action)
         : id_{id},
           side_{side},
           price_{price},
+          action_{action},
           initialQuantity_{quantity},
           remainingQuantity_{quantity},
-          type_{type}
+          type_{type},
+          timestamp_{static_cast<Timestamp>(std::time(nullptr))}
     {
     }
 
@@ -121,6 +107,16 @@ public:
         type_ = OrderType::GoodTillCancel;
     }
 
+    // Comparator for priority queue based on timestamp
+    struct TimestampComparator
+    {
+        bool operator()(const Order &a, const Order &b) const
+        {
+
+            return a.timestamp_ > b.timestamp_;
+        }
+    };
+
 private:
     OrderId id_;
     Side side_;
@@ -128,69 +124,38 @@ private:
     Quantity initialQuantity_;
     Quantity remainingQuantity_;
     OrderType type_;
+    Action action_;
+    Timestamp timestamp_;
 };
 
-// Modify order = Cancel and replace. Requires order, price, qty, side
-class OrderModify
+class PriceLevel
 {
-public:
-    OrderModify(OrderId id, Side side, Price newPrice, Quantity newQuantity)
-        : id_{id},
-          side_{side},
-          newPrice_{newPrice},
-          newQuantity_{newQuantity}
-    {
-    }
-
-    OrderId getId() const { return id_; }
-    Price getNewPrice() const { return newPrice_; }
-    Side getSide() const { return side_; }
-    Quantity getNewQuantity() const { return newQuantity_; }
-
-    // Essentially we are making a new order given the modify details
-    OrderPtr toOrderPtr(OrderType type) const
-    {
-        return std::make_shared<Order>(id_, side_, newPrice_, newQuantity_, type);
-    }
-
 private:
-    OrderId id_;
-    Price newPrice_;
-    Quantity newQuantity_;
-    Side side_;
-};
+    const Price price_;
+    Quantity totalQuantity_;
+    std::map<OrderId, Order> levelOrders_; // Although a queue is more appropriate, map is used for easy removal of orders by ID
 
-// Match Order. Aggregation of bid and ask
-struct TradeInfo
-{
-    OrderId orderId_;
-    Price price_;
-    Quantity quantity_;
-};
-
-class Trade
-{
 public:
-    Trade(const TradeInfo &bidTrade, const TradeInfo &askTrade)
-        : bidTrade_{bidTrade},
-          askTrade_{askTrade}
-
+    PriceLevel(Price price)
+        : price_{price}, totalQuantity_{0}
     {
     }
 
-    const TradeInfo &getBidTradeInfo() const { return bidTrade_; }
-    const TradeInfo &getAskTradeInfo() const { return askTrade_; }
+    Price getPrice() const { return price_; }
 
-private:
-    TradeInfo bidTrade_;
-    TradeInfo askTrade_;
+    Quantity getTotalQuantity() const { return totalQuantity_; }
+
+    void addOrder(const Order &order)
+    {
+        levelOrders_.emplace(order.getId(), order);
+        totalQuantity_ += order.getRemainingQuantity();
+    }
+
+    void removeOrder(const Order &order)
+    {
+        levelOrders_.erase(order.getId());
+        totalQuantity_ -= order.getRemainingQuantity();
+    }
+
+    std::map<OrderId, Order> &getOrders() { return levelOrders_; }
 };
-
-using Price = std::int32_t;
-using Quantity = std::uint32_t;
-using OrderId = std::uint64_t;
-using LevelInfos = std::vector<LevelInfo>;
-using OrderPtr = std::shared_ptr<Order>;
-using OrderPtrs = std::list<OrderPtr>; // Data structure to hokd list of orders at each price level
-using Trades = std::vector<Trade>;     // Handle multiple trades at once
-using OrderIds = std::vector<OrderId>;
