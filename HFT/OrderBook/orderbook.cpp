@@ -1,4 +1,4 @@
-#include "main.hpp"
+#include "orderbook.hpp"
 
 void OrderBook::calcPrice()
 {
@@ -46,6 +46,34 @@ bool OrderBook::canMatch(const Order &incomingOrder) const
         Price bestBid = bidLevels_.begin()->first;
         return incomingOrder.getType() == OrderType::Market || incomingOrder.getPrice() <= bestBid;
     }
+}
+
+bool OrderBook::canMatchFully(const Order &incomingOrder) const
+{
+    Quantity totalAvailable = 0;
+    if (incomingOrder.getSide() == Side::Buy)
+    {
+        for (const auto &askLevel : askLevels_)
+        {
+            if (incomingOrder.getType() != OrderType::Market && askLevel.first > incomingOrder.getPrice())
+                break;
+            totalAvailable += askLevel.second.getTotalQuantity();
+            if (totalAvailable >= incomingOrder.getRemainingQuantity())
+                return true;
+        }
+    }
+    else
+    {
+        for (const auto &bidLevel : bidLevels_)
+        {
+            if (incomingOrder.getType() != OrderType::Market && bidLevel.first < incomingOrder.getPrice())
+                break;
+            totalAvailable += bidLevel.second.getTotalQuantity();
+            if (totalAvailable >= incomingOrder.getRemainingQuantity())
+                return true;
+        }
+    }
+    return false;
 }
 
 void OrderBook::Match(Order &incomingOrder)
@@ -134,11 +162,14 @@ void OrderBook::processOrder(Order &order){
     switch(order.getType()){
         case OrderType::Market:
             if(canMatch(order)){
+                std::lock_guard<std::mutex> lock(mutex_);
                 Match(order);
             }
             break;
         case OrderType::GoodTillCancel:
+        case OrderType::GoodForDay:
             if(canMatch(order)){
+                std::lock_guard<std::mutex> lock(mutex_);
                 Match(order);
             }
             if(!order.isFilled()){
@@ -147,6 +178,7 @@ void OrderBook::processOrder(Order &order){
                 if(order.getSide() == Side::Buy){
                     auto it = bidLevels_.find(order.getPrice());
                     if(it == bidLevels_.end()){
+                        std::lock_guard<std::mutex> lock(mutex_);
                         auto res = bidLevels_.emplace(order.getPrice(), PriceLevel(order.getPrice()));
                         levelPtr = &(res.first->second);
                     } else {
@@ -155,12 +187,15 @@ void OrderBook::processOrder(Order &order){
                 } else {
                     auto it = askLevels_.find(order.getPrice());
                     if(it == askLevels_.end()){
+                        std::lock_guard<std::mutex> lock(mutex_);
                         auto res = askLevels_.emplace(order.getPrice(), PriceLevel(order.getPrice()));
                         levelPtr = &(res.first->second);
                     } else {
                         levelPtr = &(it->second);
                     }
                 }
+
+                std::lock_guard<std::mutex> lock(mutex_);
                 levelPtr->addOrder(order);
                 // Recalculate price after adding order
                 calcPrice();
@@ -168,11 +203,102 @@ void OrderBook::processOrder(Order &order){
             break;
         case OrderType::FillAndKill:
             if(canMatch(order)){
+                std::lock_guard<std::mutex> lock(mutex_);
                 Match(order);
             }
             // Any unfilled portion is canceled (do nothing)
             break;
+        case OrderType::FillOrKill:
+            
+            if(canMatchFully(order)){
+                Match(order);
+            }
+            // If not fully filled, entire order is canceled (do nothing)
+            break;
     }
-    
 
+}
+
+void OrderBook::cancelGFDOrders(bool isBids)
+{
+
+    if(isBids){
+
+        while(true){
+
+            // Get time
+            auto now = std::chrono::system_clock::now();
+            std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+            std::tm now_tm;
+            localtime_s(&now_tm, &now_c);
+
+            if(now_tm.tm_hour == 16 && now_tm.tm_min == 0 && now_tm.tm_sec == 0){
+
+                for(auto &bidLevelPair : bidLevels_)
+                {
+                    PriceLevel &level = bidLevelPair.second;
+                    std::map<OrderId, Order> &orders = level.getOrders();
+                    for (auto it = orders.begin(); it != orders.end();)
+                    {
+                        if (it->second.getType() == OrderType::GoodTillCancel)
+                        {
+                            // Lock mutex while modifying shared data
+                            std::lock_guard<std::mutex> lock(mutex_);
+                            it = orders.erase(it);
+                            level.removeOrder(it->second);
+                        }
+                        else
+                        {
+                            ++it;
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+    else{
+
+        while(true){
+
+            // Get time
+            auto now = std::chrono::system_clock::now();
+            std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+            std::tm now_tm;
+            localtime_s(&now_tm, &now_c);
+
+            if(now_tm.tm_hour == 16 && now_tm.tm_min == 0 && now_tm.tm_sec == 0){
+                
+                for(auto &askLevelPair : askLevels_)
+                {
+                    PriceLevel &level = askLevelPair.second;
+                    std::map<OrderId, Order> &orders = level.getOrders();
+                    for (auto it = orders.begin(); it != orders.end();)
+                    {
+                        if (it->second.getType() == OrderType::GoodTillCancel)
+                        {
+                            // Lock mutex while modifying shared data
+                            std::lock_guard<std::mutex> lock(mutex_);
+                            it = orders.erase(it);
+                            level.removeOrder(it->second);
+                        }
+                        else
+                        {
+                            ++it;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+OrderBook::~OrderBook()
+{
+    shutdownFlag_.store(true, std::memory_order_release);
+    shutdownConditionVariable_.notify_all();
+    if (ordersPruneThread_.joinable())
+    {
+        ordersPruneThread_.join();
+    }
 }
