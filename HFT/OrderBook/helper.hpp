@@ -22,6 +22,7 @@
 #include <mutex>
 #include <thread>
 #include <chrono>
+#include <random>
 
 enum class OrderType
 {

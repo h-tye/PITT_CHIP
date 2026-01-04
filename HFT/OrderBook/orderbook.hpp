@@ -19,7 +19,7 @@ private:
     void cancelGFDOrders(bool isBids);
 
 public:
-    OrderBook() : currentPrice_{0} {
+    OrderBook(Price initial_price) : currentPrice_{initial_price} {
 
         // Instaniate threads for canceling GFD orders at end of day
         ordersPruneThread_ = std::thread(&OrderBook::cancelGFDOrders, this, true);
@@ -28,5 +28,7 @@ public:
     ~OrderBook();
     void processOrder(Order &order);
     Price getPrice() const;
+    bool isEmpty() const;
+    Order getOrder(OrderId id) const;
 
 };

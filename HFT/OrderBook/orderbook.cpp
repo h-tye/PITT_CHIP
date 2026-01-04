@@ -302,3 +302,40 @@ OrderBook::~OrderBook()
         ordersPruneThread_.join();
     }
 }
+
+bool OrderBook::isEmpty() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return bidLevels_.empty() && askLevels_.empty();
+}
+
+Order OrderBook::getOrder(OrderId id) const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Search in bid levels
+    for (const auto &bidLevelPair : bidLevels_)
+    {
+        const PriceLevel &level = bidLevelPair.second;
+        const auto &orders = level.getOrders();
+        auto it = orders.find(id);
+        if (it != orders.end())
+        {
+            return it->second;
+        }
+    }
+
+    // Search in ask levels
+    for (const auto &askLevelPair : askLevels_)
+    {
+        const PriceLevel &level = askLevelPair.second;
+        const auto &orders = level.getOrders();
+        auto it = orders.find(id);
+        if (it != orders.end())
+        {
+            return it->second;
+        }
+    }
+
+    throw std::invalid_argument("Order ID not found");
+}
