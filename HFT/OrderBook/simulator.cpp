@@ -42,6 +42,45 @@ void MarketSimulator::UpdateMarketState()
     }
 }
 
+/* Thread both parts of this method to run concurrently */
+void MarketSimulator::PopulateOrderBook()
+{
+    time_t nextArrival = PoissonNextArrival();
+    time_t currentTime = time(nullptr);
+    while (true)
+    {
+        if (difftime(time(nullptr), currentTime) >= nextArrival)
+        {
+            if (!outgoingOrders_.empty())
+            {
+                Order order = outgoingOrders_.front();
+                outgoingOrders_.pop();
+                orderBook_.processOrder(order);
+            }
+            currentTime = time(nullptr);
+            nextArrival = PoissonNextArrival();
+        }
+    }
+
+    while (true)
+    {
+        if (!fpgaOrders_.empty())
+        {
+            Order order = fpgaOrders_.front();
+            fpgaOrders_.pop();
+            orderBook_.processOrder(order);
+        }
+    }
+}
+
+time_t MarketSimulator::PoissonNextArrival()
+{
+    std::default_random_engine generator(static_cast<unsigned>(time(0)));
+    std::poisson_distribution<int> distribution(simParameters_.OrderFrequency * 1000);
+
+    return static_cast<time_t>(distribution(generator));
+}
+
 void MarketSimulator::createAdd()
 {
     Side side = (rand() % 2 == 0) ? Side::Buy : Side::Sell;
@@ -67,12 +106,12 @@ void MarketSimulator::createAdd()
             break;
         }
         Order order(orderId, side, price, quantity, type, Action::Add);
-        outputStream_.push(order);
+        outgoingOrders_.push(order);
     }
     else
     {
         Order order(orderId, side, quantity, type);
-        outputStream_.push(order);
+        outgoingOrders_.push(order);
     }
 }
 
@@ -87,13 +126,13 @@ void MarketSimulator::createModifyOrCancel()
         Quantity newQuantity = calcOrderQuantity();
         Price newPrice = calcOrderPrice();
         Order modifiedOrder(existingOrder.getId(), existingOrder.getSide(), newPrice, newQuantity, existingOrder.getType(), Action::Modify);
-        outputStream_.push(modifiedOrder);
+        outgoingOrders_.push(modifiedOrder);
     }
     else
     {
         // Cancel order
         Order cancelOrder(existingOrder.getId(), existingOrder.getSide(), existingOrder.getPrice(), existingOrder.getRemainingQuantity(), existingOrder.getType(), Action::Cancel);
-        outputStream_.push(cancelOrder);
+        outgoingOrders_.push(cancelOrder);
     }
 }
 

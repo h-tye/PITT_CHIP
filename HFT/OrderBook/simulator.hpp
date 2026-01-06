@@ -31,17 +31,23 @@ class MarketSimulator
 {
 private:
     OrderBook orderBook_;
+    std::queue<Order> outgoingOrders_;
+    std::queue<Order> fpgaOrders_;
+    char* outputStream_;
+    char* fpgaStream_;
     SimulationMode simMode_;
-    std::queue<Order> outputStream_;
-    std::queue<Order> inputStream_;
     MarketState marketState_;
     SimulationParamaters simParameters_;
 
     void GenerateOrders();
     void ReceiveOrders();
     void PopulateOrderBook();
+    void SendOrders();
     void UpdateMarketState();
 
+    void EncodeOrders();
+    void DecodeOrders();
+    time_t PoissonNextArrival();
     Price calcOrderPrice();
     Quantity calcOrderQuantity();
     void createAdd();
