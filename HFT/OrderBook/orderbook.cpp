@@ -112,7 +112,6 @@ void OrderBook::Match(Order &incomingOrder)
             {
                 ++askIt;
             }
-            
         }
     }
     else
@@ -157,74 +156,85 @@ void OrderBook::Match(Order &incomingOrder)
 }
 
 // Process order based on type
-void OrderBook::processOrder(Order &order){
-    
-    switch(order.getType()){
-        case OrderType::Market:
-            if(canMatch(order)){
-                std::lock_guard<std::mutex> lock(mutex_);
-                Match(order);
-            }
-            break;
-        case OrderType::GoodTillCancel:
-        case OrderType::GoodForDay:
-            if(canMatch(order)){
-                std::lock_guard<std::mutex> lock(mutex_);
-                Match(order);
-            }
-            if(!order.isFilled()){
-                
-                PriceLevel* levelPtr = nullptr;
-                if(order.getSide() == Side::Buy){
-                    auto it = bidLevels_.find(order.getPrice());
-                    if(it == bidLevels_.end()){
-                        std::lock_guard<std::mutex> lock(mutex_);
-                        auto res = bidLevels_.emplace(order.getPrice(), PriceLevel(order.getPrice()));
-                        levelPtr = &(res.first->second);
-                    } else {
-                        levelPtr = &(it->second);
-                    }
-                } else {
-                    auto it = askLevels_.find(order.getPrice());
-                    if(it == askLevels_.end()){
-                        std::lock_guard<std::mutex> lock(mutex_);
-                        auto res = askLevels_.emplace(order.getPrice(), PriceLevel(order.getPrice()));
-                        levelPtr = &(res.first->second);
-                    } else {
-                        levelPtr = &(it->second);
-                    }
+void OrderBook::processOrder(Order &order)
+{
+
+    switch (order.getType())
+    {
+    case OrderType::Market:
+        if (canMatch(order))
+        {
+            Match(order);
+        }
+        break;
+    case OrderType::GoodTillCancel:
+    case OrderType::GoodForDay:
+        if (canMatch(order))
+        {
+            Match(order);
+        }
+        if (!order.isFilled())
+        {
+
+            PriceLevel *levelPtr = nullptr;
+            if (order.getSide() == Side::Buy)
+            {
+                auto it = bidLevels_.find(order.getPrice());
+                if (it == bidLevels_.end())
+                {
+                    auto res = bidLevels_.emplace(order.getPrice(), PriceLevel(order.getPrice()));
+                    levelPtr = &(res.first->second);
                 }
+                else
+                {
+                    levelPtr = &(it->second);
+                }
+            }
+            else
+            {
+                auto it = askLevels_.find(order.getPrice());
+                if (it == askLevels_.end())
+                {
+                    auto res = askLevels_.emplace(order.getPrice(), PriceLevel(order.getPrice()));
+                    levelPtr = &(res.first->second);
+                }
+                else
+                {
+                    levelPtr = &(it->second);
+                }
+            }
 
-                std::lock_guard<std::mutex> lock(mutex_);
-                levelPtr->addOrder(order);
-                // Recalculate price after adding order
-                calcPrice();
-            }
-            break;
-        case OrderType::FillAndKill:
-            if(canMatch(order)){
-                std::lock_guard<std::mutex> lock(mutex_);
-                Match(order);
-            }
-            // Any unfilled portion is canceled (do nothing)
-            break;
-        case OrderType::FillOrKill:
-            
-            if(canMatchFully(order)){
-                Match(order);
-            }
-            // If not fully filled, entire order is canceled (do nothing)
-            break;
+            levelPtr->addOrder(order);
+            // Recalculate price after adding order
+            calcPrice();
+        }
+        break;
+    case OrderType::FillAndKill:
+        if (canMatch(order))
+        {
+            Match(order);
+        }
+        // Any unfilled portion is canceled (do nothing)
+        break;
+    case OrderType::FillOrKill:
+
+        if (canMatchFully(order))
+        {
+            Match(order);
+        }
+        // If not fully filled, entire order is canceled (do nothing)
+        break;
     }
-
 }
 
 void OrderBook::cancelGFDOrders(bool isBids)
 {
 
-    if(isBids){
+    if (isBids)
+    {
 
-        while(true){
+        while (true)
+        {
 
             // Get time
             auto now = std::chrono::system_clock::now();
@@ -232,9 +242,10 @@ void OrderBook::cancelGFDOrders(bool isBids)
             std::tm now_tm;
             localtime_s(&now_tm, &now_c);
 
-            if(now_tm.tm_hour == 16 && now_tm.tm_min == 0 && now_tm.tm_sec == 0){
+            if (now_tm.tm_hour == 16 && now_tm.tm_min == 0 && now_tm.tm_sec == 0)
+            {
 
-                for(auto &bidLevelPair : bidLevels_)
+                for (auto &bidLevelPair : bidLevels_)
                 {
                     PriceLevel &level = bidLevelPair.second;
                     std::map<OrderId, Order> &orders = level.getOrders();
@@ -243,7 +254,6 @@ void OrderBook::cancelGFDOrders(bool isBids)
                         if (it->second.getType() == OrderType::GoodTillCancel)
                         {
                             // Lock mutex while modifying shared data
-                            std::lock_guard<std::mutex> lock(mutex_);
                             it = orders.erase(it);
                             level.removeOrder(it->second);
                         }
@@ -255,11 +265,12 @@ void OrderBook::cancelGFDOrders(bool isBids)
                 }
             }
         }
-
     }
-    else{
+    else
+    {
 
-        while(true){
+        while (true)
+        {
 
             // Get time
             auto now = std::chrono::system_clock::now();
@@ -267,9 +278,10 @@ void OrderBook::cancelGFDOrders(bool isBids)
             std::tm now_tm;
             localtime_s(&now_tm, &now_c);
 
-            if(now_tm.tm_hour == 16 && now_tm.tm_min == 0 && now_tm.tm_sec == 0){
-                
-                for(auto &askLevelPair : askLevels_)
+            if (now_tm.tm_hour == 16 && now_tm.tm_min == 0 && now_tm.tm_sec == 0)
+            {
+
+                for (auto &askLevelPair : askLevels_)
                 {
                     PriceLevel &level = askLevelPair.second;
                     std::map<OrderId, Order> &orders = level.getOrders();
@@ -278,7 +290,6 @@ void OrderBook::cancelGFDOrders(bool isBids)
                         if (it->second.getType() == OrderType::GoodTillCancel)
                         {
                             // Lock mutex while modifying shared data
-                            std::lock_guard<std::mutex> lock(mutex_);
                             it = orders.erase(it);
                             level.removeOrder(it->second);
                         }
@@ -295,23 +306,17 @@ void OrderBook::cancelGFDOrders(bool isBids)
 
 OrderBook::~OrderBook()
 {
-    shutdownFlag_.store(true, std::memory_order_release);
-    shutdownConditionVariable_.notify_all();
-    if (ordersPruneThread_.joinable())
-    {
-        ordersPruneThread_.join();
-    }
+    // Signal threads to shutdown
+    // Join threads
 }
 
 bool OrderBook::isEmpty() const
 {
-    std::lock_guard<std::mutex> lock(mutex_);
     return bidLevels_.empty() && askLevels_.empty();
 }
 
 Order OrderBook::getOrder(OrderId id) const
 {
-    std::lock_guard<std::mutex> lock(mutex_);
 
     // Search in bid levels
     for (const auto &bidLevelPair : bidLevels_)
@@ -338,4 +343,78 @@ Order OrderBook::getOrder(OrderId id) const
     }
 
     throw std::invalid_argument("Order ID not found");
+}
+
+int OrderBook::getLevelQuantity(Side side, Price price) const
+{
+    if (side == Side::Buy)
+    {
+        auto it = bidLevels_.find(price);
+        if (it != bidLevels_.end())
+        {
+            return it->second.getTotalQuantity();
+        }
+    }
+    else
+    {
+        auto it = askLevels_.find(price);
+        if (it != askLevels_.end())
+        {
+            return it->second.getTotalQuantity();
+        }
+    }
+    return 0; // Level not found
+}
+
+double OrderBook::getSpread() const
+{
+    if (bidLevels_.empty() || askLevels_.empty())
+    {
+        throw std::runtime_error("Cannot calculate spread: one side of the order book is empty");
+    }
+
+    Price bestBid = bidLevels_.begin()->first;
+    Price bestAsk = askLevels_.begin()->first;
+
+    return static_cast<double>(bestAsk - bestBid);
+}
+
+Price OrderBook::getBestSidePrice(Side side) const
+{
+    if (side == Side::Buy)
+    {
+        if (bidLevels_.empty())
+        {
+            throw std::runtime_error("No bid levels available");
+        }
+        return bidLevels_.begin()->first;
+    }
+    else
+    {
+        if (askLevels_.empty())
+        {
+            throw std::runtime_error("No ask levels available");
+        }
+        return askLevels_.begin()->first;
+    }
+}
+
+Quantity OrderBook::getSideQuantity(Side side) const
+{
+    Quantity totalQuantity = 0;
+    if (side == Side::Buy)
+    {
+        for (const auto &bidLevelPair : bidLevels_)
+        {
+            totalQuantity += bidLevelPair.second.getTotalQuantity();
+        }
+    }
+    else
+    {
+        for (const auto &askLevelPair : askLevels_)
+        {
+            totalQuantity += askLevelPair.second.getTotalQuantity();
+        }
+    }
+    return totalQuantity;
 }

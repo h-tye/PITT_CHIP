@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <map>
 #include <string>
 #include <map>
@@ -48,7 +49,7 @@ enum class Action
     Null
 };
 
-using Price = std::int32_t;
+using Price = std::double_t;
 using Quantity = std::uint32_t;
 using OrderId = std::uint64_t;
 using OrderIds = std::vector<OrderId>;

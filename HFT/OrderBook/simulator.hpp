@@ -21,10 +21,13 @@ enum class MarketState{
 
 struct Report{
     Price currentPrice;
+    double spread;
     Quantity totalBidQuantity;
     Quantity totalAskQuantity;
     size_t totalBidLevels;
     size_t totalAskLevels;
+    Quantity bestBidQuantity;
+    Quantity bestAskQuantity;
 };
 
 class MarketSimulator
@@ -35,9 +38,12 @@ private:
     std::queue<Order> fpgaOrders_;
     char* outputStream_;
     char* fpgaStream_;
+    bool beginRun_{false};
     SimulationMode simMode_;
     MarketState marketState_;
     SimulationParamaters simParameters_;
+    std::string reportFile_;
+    Report marketReport_;
 
     void GenerateOrders();
     void ReceiveOrders();
@@ -55,6 +61,7 @@ private:
 
 public:
 
-    MarketSimulator(Price initialPrice, SimulationMode simMode, SimulationParamaters simParameters);
-    Report getReport() const;
+    MarketSimulator(Price initialPrice, SimulationMode simMode, SimulationParamaters simParameters, std::string reportFile);
+    void updateReport();
+    void writeReport() const;
 };

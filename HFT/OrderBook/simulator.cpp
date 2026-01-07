@@ -1,10 +1,39 @@
 #include "simulator.hpp"
 
-MarketSimulator::MarketSimulator(Price initialPrice, SimulationMode simMode, SimulationParamaters simParameters)
-    : orderBook_(initialPrice), simMode_(simMode), simParameters_(simParameters) {}
+MarketSimulator::MarketSimulator(Price initialPrice, SimulationMode simMode, SimulationParamaters simParameters, std::string reportFile)
+    : orderBook_(initialPrice), simMode_(simMode), simParameters_(simParameters), reportFile_(reportFile)
+{
+
+    // Initialize simulation
+    GenerateOrders();
+    PopulateOrderBook();
+    SendOrders();
+
+    // Once all parties are set up, begin the run
+    if (beginRun_)
+    {
+        GenerateOrders(); // All of these should run indefinitely in their own threads
+        PopulateOrderBook();
+        SendOrders();
+        ReceiveOrders();
+        UpdateMarketState();
+    }
+}
 
 void MarketSimulator::GenerateOrders()
 {
+
+    if (!beginRun_)
+    {
+        // Initial population of order book
+        for (int i = 0; i < 1000; ++i)
+        {
+            createAdd();
+        }
+        beginRun_ = true;
+        return;
+    }
+
     if (simMode_ == SimulationMode::Normal)
     {
 
@@ -152,4 +181,32 @@ Quantity MarketSimulator::calcOrderQuantity()
     std::uniform_int_distribution<int> distribution(1, simParameters_.OrderVolume * 100); // Max volume scaled
 
     return static_cast<Quantity>(distribution(generator)) / orderBook_.getPrice(); // High price usually correlates to lower quantity
+}
+
+void MarketSimulator::updateReport()
+{
+    marketReport_.currentPrice = orderBook_.getPrice();
+    marketReport_.spread = orderBook_.getSpread();
+    marketReport_.bestBidQuantity = orderBook_.getLevelQuantity(Side::Buy, orderBook_.getBestSidePrice(Side::Buy));
+    marketReport_.bestAskQuantity = orderBook_.getLevelQuantity(Side::Sell, orderBook_.getBestSidePrice(Side::Sell));
+    marketReport_.totalBidQuantity = orderBook_.getSideQuantity(Side::Buy);
+    marketReport_.totalAskQuantity = orderBook_.getSideQuantity(Side::Sell);
+}
+
+void MarketSimulator::writeReport() const
+{
+    std::ofstream reportStream(reportFile_, std::ios::app);
+    if (reportStream.is_open())
+    {
+        reportStream << "Current Price: " << marketReport_.currentPrice << "\n";
+        reportStream << "Spread: " << marketReport_.spread << "\n";
+        reportStream << "Total Bid Quantity: " << marketReport_.totalBidQuantity << "\n";
+        reportStream << "Total Ask Quantity: " << marketReport_.totalAskQuantity << "\n";
+        reportStream << "Total Bid Levels: " << marketReport_.totalBidLevels << "\n";
+        reportStream << "Total Ask Levels: " << marketReport_.totalAskLevels << "\n";
+        reportStream << "Best Bid Quantity: " << marketReport_.bestBidQuantity << "\n";
+        reportStream << "Best Ask Quantity: " << marketReport_.bestAskQuantity << "\n";
+        reportStream << "----------------------------------------\n";
+        reportStream.close();
+    }
 }
