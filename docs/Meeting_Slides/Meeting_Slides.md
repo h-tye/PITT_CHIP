@@ -1,7 +1,7 @@
-# Weekly Meeting – Feb 5, 2025
+# Weekly Meeting – January 12, 2026
 ## Slides
 🔗 Google Slides:https://docs.google.com/presentation/d/1M6-78zo7IlYoQHLaV08Fi6w2Ze7EaudBIe4jDB6lS-0/edit?usp=sharing
-##Key Updates 
+## Key Updates 
 - Transitioned to using **GitHub Projects** for task tracking and project management.
 - Reorganized workflow so tasks are due every **2–3 weeks** instead of weekly.
 - Established a new overall project timeline.
