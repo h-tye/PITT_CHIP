@@ -28,15 +28,21 @@ module FieldAligner #(
     input logic [beat_width-1:0] din,
     input logic rstn,
     output logic [ring_size-1:0] next_FIFO_en,
-    output logic [ring_size-1:0] dout [ring_size-1:0]
+    output logic [beat_width-1:0] douts [0:3],  // Superscalar so we are able to process more than 1 field at a time
+    output logic [0:3] field_valid  // Indicates whether superscalar path has valid feild
     );
     
     // Stop & start ptr calc
-    reg [ring_size-1:0] stop_ptr;
-    logic [ring_size-1:0] stop_bits;
+    reg [ring_size-1:0] stop_ptrs;
+    reg [ring_size-1:0] stop_bits;
     reg [7:0] ring_buffer [0:ring_size-1];
-    integer k;
-    always_comb begin   // Extract stop bits
+    logic [2:0] stop_ptr [0:3];   // four pointers, each 3-bit index
+    logic [2:0] start_ptr;
+    integer k, j;
+    int count = 0;
+    
+    // Extract stop bits
+    always_comb begin
         for(k = 0; k < ring_size/2; k = k + 1) begin
             stop_bits[k] = din[(k*8)-1];
         end
@@ -48,7 +54,7 @@ module FieldAligner #(
         if(~rstn) begin
             for(k = 0; k < ring_size; k = k + 1) begin
                     ring_buffer[k] <= 0;
-                    stop_ptr[k] <= 0;
+                    stop_ptrs[k] <= 0;
             end
         end
         else
@@ -65,19 +71,39 @@ module FieldAligner #(
                 top_full <= 0;
             end
     end
-    assign dout = ring_buffer; // Assign full buffer to dout, invalid fields will be ignored by stop_ptrs
     
-    genvar g;
-    generate
-        for (g = 0; g < ring_size; g++) begin : GEN_STOP
-            always_ff @(posedge clk) begin
-                if (g == ring_size-1)
-                    stop_ptr[g] <= stop_bits[g]; 
-                else
-                    stop_ptr[g] <= ~(|stop_bits[ring_size-1:g+1]);  // Stop ptr is 1 only if rest of stop bits are 0s -> field is incomplete
+    // Field ptr generatrion
+    always_comb begin
+        for (int i = 7; i >= 0; i--) begin
+            if (stop_bits[i] && count < 4) begin
+                stop_ptr[count] = i;
+                field_valid[count] = 1;
+                count++;
             end
         end
-    endgenerate
-    assign next_FIFO_en = stop_ptr;
+    
+        for (j = count; j < 4; j++) begin
+            stop_ptr[j] = '0;
+            field_valid[j] = 0;
+        end
+        start_ptr <= stop_ptr[3]; // Take stop of previous cycle
+    end
+
+    
+    // Assignment of fields to superscalar streams
+    always_comb begin
+        for(j = 0; j < 4; j = j + 1) begin
+            if(j == 0) begin
+                for(k = start_ptr; k < stop_ptr[0] + start_ptr; k = k + 1) begin
+                    douts[j][(k+1)*7 -: 8] <= ring_buffer[k];
+                end
+            end
+            else begin
+                for(k = start_ptr + stop_ptr[j - 1]; k < stop_ptr[j] + start_ptr; k = k + 1) begin
+                    douts[j][(k+1)*7 -: 8] <= ring_buffer[k];
+                end
+            end
+        end
+    end
 
 endmodule
