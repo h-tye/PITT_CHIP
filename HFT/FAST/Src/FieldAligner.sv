@@ -22,13 +22,16 @@
 
 module FieldAligner #(
     parameter beat_width = 64,
+    parameter max_message_size = 10,   // Max number of fields in a template
+    parameter num_templates = 4,
     parameter ring_size = 16
     )(
     input logic clk,
     input logic [beat_width-1:0] din,
+    input logic [$clog2(max_message_size)-1:0] message_field_count,
     input logic rstn,
-    output logic [ring_size-1:0] next_FIFO_en,
-    output logic [beat_width-1:0] douts [0:3],  // Superscalar so we are able to process more than 1 field at a time
+    output logic new_message,
+    output logic [beat_width+1:0] douts [0:3],  // Superscalar so we are able to process more than 1 field at a time
     output logic [0:3] field_valid  // Indicates whether superscalar path has valid feild
     );
     
@@ -36,6 +39,7 @@ module FieldAligner #(
     reg [ring_size-1:0] stop_ptrs;
     reg [ring_size-1:0] stop_bits;
     reg [7:0] ring_buffer [0:ring_size-1];
+    reg [$clog2(max_message_size)-1:0] current_field_count;
     logic [2:0] stop_ptr [0:3];   // four pointers, each 3-bit index
     logic [2:0] start_ptr;
     integer k, j;
@@ -79,9 +83,16 @@ module FieldAligner #(
                 stop_ptr[count] = i;
                 field_valid[count] = 1;
                 count++;
+                current_field_count <= current_field_count + 1;
+                if(current_field_count == message_field_count - 1) begin
+                    douts[count][beat_width+1] <= 1; // Indicate this field is PMAP
+                end
+                else if (current_field_count == message_field_count) begin
+                    douts[count][beat_width] <= 1;   // Indicat this field is TID
+                    new_message <= 1;
+                end
             end
         end
-    
         for (j = count; j < 4; j++) begin
             stop_ptr[j] = '0;
             field_valid[j] = 0;
