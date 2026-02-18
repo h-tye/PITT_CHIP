@@ -27,7 +27,8 @@ module MessageFIFO_Ctrl #(
     parameter field_op_size = 32,   // Assume 32 bits for ops per field
     parameter FIFO_size = 32,        // FIFO's store up to 32 fields at a time
     parameter messageID_size = 21,
-    parameter num_messages = 1
+    parameter num_messages = 1,
+    parameter FIFO_width = 2
     )(
     input clk,
     input rstn,
@@ -36,7 +37,7 @@ module MessageFIFO_Ctrl #(
     output logic [beat_width-1:0] ordered_messages [0:num_messages-1][0:max_message_size-1]
     );
     
-    logic [1+messageID_size+$clog2(max_message_size)+beat_width:0] fifo_out [0:num_decoders-1];
+    logic [1+messageID_size+$clog2(max_message_size)+beat_width:0] fifo_out [0:num_decoders*FIFO_width-1];
     logic [messageID_size-1:0] curr_messageID, next_messageID;
     logic [$clog2(max_message_size)-1:0] curr_count, next_count;
     logic [$clog2(2*num_decoders)-1:0] curr_idx, next_idx;
@@ -57,7 +58,7 @@ module MessageFIFO_Ctrl #(
         next_hit = 0;
         curr_idx = 0;
         next_idx = 0;
-        for(k = 0; k < 2*num_decoders; k = k + 1) begin
+        for(k = 0; k < FIFO_width*num_decoders; k = k + 1) begin
             if(  // Check field tag, valid, and message ID
             (fifo_out[k][$clog2(max_message_size)+beat_width -: $clog2(max_message_size)] == curr_count) &&
             (fifo_out[k][1+messageID_size+$clog2(max_message_size)+beat_width]) &&
