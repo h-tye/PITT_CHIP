@@ -24,19 +24,20 @@ module FieldAligner #(
     parameter beat_width = 64,
     parameter max_message_size = 10,   // Max number of fields in a template
     parameter num_templates = 4,
-    parameter ring_size = 16
+    parameter ring_size = 16,
+    parameter sup_paths = 4  // Superscalar paths
     )(
     input logic clk,
     input logic [beat_width-1:0] din,
     input logic [$clog2(max_message_size)-1:0] message_field_count,
     input logic rstn,
     output logic new_message,
-    output logic [beat_width+1:0] douts [0:3],  // Superscalar so we are able to process more than 1 field at a time
-    output logic [0:3] field_valid  // Indicates whether superscalar path has valid feild
+    output logic [beat_width+1:0] douts [0:sup_paths-1],  // Superscalar so we are able to process more than 1 field at a time
+    output logic [3:0] field_valid  // Indicates whether superscalar path has valid feild
     );
     
     // Stop & start ptr calc
-    reg [ring_size-1:0] stop_ptrs;
+    reg [3:0] stop_ptrs [1:0];
     reg [ring_size-1:0] stop_bits;
     reg [7:0] ring_buffer [0:ring_size-1];
     reg [$clog2(max_message_size)-1:0] current_field_count;
@@ -52,7 +53,7 @@ module FieldAligner #(
         end
     end 
     
-    //Store din
+    // Store inputs
     logic top_full;
     always_ff @(posedge clk) begin
         if(~rstn) begin
@@ -76,43 +77,62 @@ module FieldAligner #(
             end
     end
     
-    // Field ptr generatrion
-    always_comb begin
-        for (int i = 7; i >= 0; i--) begin
-            if (stop_bits[i] && count < 4) begin
-                stop_ptr[count] = i;
-                field_valid[count] = 1;
-                count++;
-                current_field_count <= current_field_count + 1;
-                if(current_field_count == message_field_count - 1) begin
-                    douts[count][beat_width+1] <= 1; // Indicate this field is PMAP
+    // Assignment of fields to superscalar streams, pointer handling, & PMAP/TID flagging
+    always_ff @(posedge clk) begin
+        if(!rstn) begin
+            for(j = 0; j < sup_paths; j = j + 1) begin
+                douts[j] <=  0;
+            end
+            current_field_count <= 0;
+            start_ptr <= 0;
+        end
+        else begin
+            for(j = 0; j < sup_paths; j = j + 1) begin
+                if(j == 0) begin
+                    for(k = start_ptr; k < stop_ptr[0] + start_ptr; k = k + 1) begin
+                        douts[j][(k+1)*7 -: 8] <= ring_buffer[k];
+                    end
                 end
-                else if (current_field_count == message_field_count) begin
-                    douts[count][beat_width] <= 1;   // Indicat this field is TID
-                    new_message <= 1;
+                else begin
+                    for(k = start_ptr + stop_ptr[j - 1]; k < stop_ptr[j] + start_ptr; k = k + 1) begin
+                        douts[j][(k+1)*7 -: 8] <= ring_buffer[k];
+                    end
                 end
             end
-        end
-        for (j = count; j < 4; j++) begin
-            stop_ptr[j] = '0;
-            field_valid[j] = 0;
-        end
-        start_ptr <= stop_ptr[3]; // Take stop of previous cycle
-    end
-
-    
-    // Assignment of fields to superscalar streams
-    always_comb begin
-        for(j = 0; j < 4; j = j + 1) begin
-            if(j == 0) begin
-                for(k = start_ptr; k < stop_ptr[0] + start_ptr; k = k + 1) begin
-                    douts[j][(k+1)*7 -: 8] <= ring_buffer[k];
-                end
+            
+            if(start_ptr >= ring_size - 1) begin
+                start_ptr <= 0;
             end
             else begin
-                for(k = start_ptr + stop_ptr[j - 1]; k < stop_ptr[j] + start_ptr; k = k + 1) begin
-                    douts[j][(k+1)*7 -: 8] <= ring_buffer[k];
-                end
+                start_ptr <= stop_ptr[sup_paths-1] + 1; // Take stop of previous cycle
+            end
+            
+            current_field_count <= current_field_count + count;
+            if(current_field_count == message_field_count - 1) begin
+                douts[count][beat_width+1] <= 1; // Indicate this field is PMAP
+            end
+            else if (current_field_count == message_field_count) begin
+                douts[count][beat_width] <= 1;   // Indicat this field is TID
+                new_message <= 1;
+            end
+        end
+    end
+    
+    // Field ptr generatrion
+    logic correct_idx;
+    always_comb begin
+        count = 0;
+        for (int j = 0; j < sup_paths; j++) begin
+            stop_ptr[j]   = 0;
+            field_valid[j]= 0;
+        end
+        for (int i = 7; i >= 0; i--) begin
+            correct_idx = (i + start_ptr) % ring_size;
+    
+            if (stop_bits[correct_idx] && count < sup_paths) begin
+                stop_ptr[count]   = correct_idx;
+                field_valid[count]= 1;
+                count++;
             end
         end
     end
