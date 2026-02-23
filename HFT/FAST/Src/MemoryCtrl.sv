@@ -1,4 +1,4 @@
-=`timescale 1ns / 1ps
+`timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
 // Company: 
 // Engineer: 
@@ -31,7 +31,8 @@ module MemoryCtrl #(
     input logic rstn,
     input logic new_message,
     input logic [beat_width+1:0] dins [sup_paths],
-    input logic [sup_paths:0] field_valids,
+    input logic [sup_paths-1:0] field_valids,
+    input logic [sup_paths-1:0] field_complete,
     input logic [beat_width-1:0] replacement_field,         // To replace previous value
     input logic [$clog2(max_message_size)-1:0] replace_field_idx,
     input logic replace_field,
@@ -50,7 +51,7 @@ module MemoryCtrl #(
         // Update temaplate and previous values for new message
         if(new_message) begin
             for(k = 0; k < sup_paths; k = k + 1) begin
-                if(dins[beat_width] && field_valids[k]) begin
+                if(dins[beat_width] && field_complete[k]) begin
                     TID <= dins[k];
                     if(TID != dins[k]) begin
                         out_template <= template[k];       // Only fetch if TID is different
