@@ -23,7 +23,8 @@
 module MessageFIFO_Ctrl #(
     parameter beat_width = 64,
     parameter max_message_size = 10,  // Max number of fields per template
-    parameter num_decoders = 4,
+    parameter sup_paths = 4,
+    parameter num_decoders = 8,
     parameter field_op_size = 32,   // Assume 32 bits for ops per field
     parameter FIFO_size = 32,        // FIFO's store up to 32 fields at a time
     parameter messageID_size = 21,
@@ -33,11 +34,11 @@ module MessageFIFO_Ctrl #(
     input clk,
     input rstn,
     input FIFO_filled,
-    input logic [1+messageID_size+$clog2(max_message_size)+beat_width:0] decoded_fields [0:num_decoders-1],
+    input logic [messageID_size+$clog2(max_message_size)+beat_width:0] decoded_fields [0:num_decoders-1], // Valid + size + field num + payload
     output logic [beat_width-1:0] ordered_messages [0:num_messages-1][0:max_message_size-1]
     );
     
-    logic [1+messageID_size+$clog2(max_message_size)+beat_width:0] fifo_out [0:num_decoders*FIFO_width-1];
+    logic [messageID_size+$clog2(max_message_size)+beat_width:0] fifo_out [0:num_decoders*FIFO_width-1];
     logic [messageID_size-1:0] curr_messageID, next_messageID;
     logic [$clog2(max_message_size)-1:0] curr_count, next_count;
     logic [$clog2(2*num_decoders)-1:0] curr_idx, next_idx;
