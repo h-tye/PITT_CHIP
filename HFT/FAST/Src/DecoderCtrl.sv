@@ -39,12 +39,15 @@ module DecoderCtrl #(
     input logic [sup_paths-1:0] field_complete,
     input logic [$clog2(num_templates)-1:0] TID,
     output logic [field_op_size-1:0] field_ops_stream[num_decoders/2],
-    output logic [field_op_size-1:0] field_ops_prev[num_decoders/2]
+    output logic [field_op_size-1:0] field_ops_prev[num_decoders/2],
+    output logic [$clog2(max_message_size)-1:0] fields_finished
     );
     
     logic [beat_width-1:0] pmap, pmap_reg;
     logic [field_op_size-1:0] t_field_ops_stream [max_message_size-1:0];
     logic [field_op_size-1:0] t_field_ops_prev [max_message_size-1:0];
+    logic [$clog2(max_message_size)-1:0] stream_finished;
+    logic [$clog2(max_message_size)-1:0] prev_finished;
     integer k,j;
     
     OpGenerator U(
@@ -59,17 +62,21 @@ module DecoderCtrl #(
      OpScheduler StreamScheduler(
         .clk(clk),
         .rstn(rstn),
+        .new_message(new_message),
         .field_valids(field_complete),
         .total_field_ops(t_field_ops_stream),
-        .field_ops(field_ops_stream)
+        .field_ops(field_ops_stream),
+        .fields_finished(stream_finished)
         );
         
      OpScheduler PrevScheduler(
         .clk(clk),
         .rstn(rstn),
+        .new_message(new_message),
         .field_valids(prev_decoders_done),
         .total_field_ops(t_field_ops_prev),
-        .field_ops(field_ops_prev)
+        .field_ops(field_ops_prev),
+        .fields_finished(prev_finished)
         );
      
      // Set pmap
@@ -88,6 +95,8 @@ module DecoderCtrl #(
         else if(new_message) begin
             pmap_reg <= pmap;
         end
+        
+        fields_finished <= stream_finished + prev_finished;
      end
          
 endmodule
