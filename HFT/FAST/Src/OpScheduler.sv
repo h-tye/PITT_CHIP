@@ -31,9 +31,11 @@ module OpScheduler #(
     )(
     input logic clk,
     input logic rstn,
+    input logic new_message,
     input logic [sup_paths-1:0] field_complete,
     input logic [field_op_size-1:0] total_field_ops [max_message_size-1:0],
-    output logic [field_op_size-1:0] field_ops [num_decoders:0]
+    output logic [field_op_size-1:0] field_ops [num_decoders:0],
+    output logic [$clog2(max_message_size)-1:0] fields_finished
     );
     
     logic [max_message_size-1:0] fields_issued;
@@ -52,6 +54,7 @@ module OpScheduler #(
                 field_ops[ops_order[k]] <= 0;
                 field_count = 0;
             end
+            fields_finished <= 0;
         end
         else begin
             for(j = 0; j < num_decoders; j = j + 1) begin
@@ -64,9 +67,15 @@ module OpScheduler #(
             end
             
             for(k = 0; k < max_message_size ; k = k + 1) begin 
-                if(!fields_completed[k] && field_count < num_decoders) begin // If not completed, reissue to same decoder
+                if(!fields_completed[k] && field_count < num_decoders) begin // If not completed, issue to decoder
                     field_ops[ops_order[k]] <= total_field_ops[k];
                     field_count = field_count + 1;
+                end
+                else if(fields_completed[k]) begin
+                    fields_finished <= fields_finished + 1;
+                    if(fields_finished == max_message_size) begin
+                        fields_finished <= 0;
+                    end
                 end
             end
         end
