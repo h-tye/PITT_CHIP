@@ -32,8 +32,9 @@ module FieldAligner #(
     input logic [$clog2(max_message_size)-1:0] message_field_count,
     input logic rstn,
     output logic new_message,
-    output logic [beat_width+1:0] douts [0:sup_paths-1],  // Superscalar so we are able to process more than 1 field at a time
-    output logic [3:0] field_valid  // Indicates whether superscalar path has valid feild
+    output logic [beat_width+1:0] douts [sup_paths],  // Superscalar so we are able to process more than 1 field at a time
+    output logic [sup_paths-1:0] field_complete,
+    output logic [sup_paths-1:0] field_valid  // Indicates whether superscalar path has valid feild
     );
     
     // Stop & start ptr calc
@@ -122,18 +123,26 @@ module FieldAligner #(
     logic correct_idx;
     always_comb begin
         count = 0;
+        field_valid[0] = 1;  // At least 1 field will be valid 
+        for (int j = 1; j < sup_paths; j++) begin
+            field_valid[j] = 0;
+        end
         for (int j = 0; j < sup_paths; j++) begin
-            stop_ptr[j]   = 0;
-            field_valid[j]= 0;
+            stop_ptr[j] = 0;
+            field_complete[j] = 0;
         end
         for (int i = 7; i >= 0; i--) begin
             correct_idx = (i + start_ptr) % ring_size;
     
             if (stop_bits[correct_idx] && count < sup_paths) begin
-                stop_ptr[count]   = correct_idx;
-                field_valid[count]= 1;
+                stop_ptr[count] = correct_idx;
+                field_valid[count] = 1;
+                field_complete[count] = 1;
                 count++;
             end
+        end
+        if(count < sup_paths - 1) begin
+            field_valid[count + 1] = 1; // Mark incomplete field as still valid
         end
     end
 
