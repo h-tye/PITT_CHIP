@@ -29,12 +29,12 @@ module Field_FIFO #(
     )(
         input logic clk,
         input logic rstn,
-        input logic [1+messageID_size+$clog2(max_message_size)+beat_width:0] decoded_fields [0:num_decoders-1],
-        output logic [1+messageID_size+$clog2(max_message_size)+beat_width:0] out_fields [0:num_decoders*FIFO_width-1]
+        input logic [messageID_size+$clog2(max_message_size)+beat_width:0] decoded_fields [0:num_decoders-1],
+        output logic [messageID_size+$clog2(max_message_size)+beat_width-1:0] out_fields [0:num_decoders*FIFO_width-1]
     );
     
-    reg [$clog2(2*num_decoders)+1+messageID_size+$clog2(max_message_size)+beat_width:0] registers [0:2*num_decoders-1];
-    reg start_ptr;
+    logic [$clog2(2*num_decoders)+messageID_size+$clog2(max_message_size)+beat_width-1:0] registers [0:2*num_decoders-1];
+    logic start_ptr;
     integer k;
     
     always_ff @(posedge clk) begin
@@ -45,14 +45,20 @@ module Field_FIFO #(
             start_ptr <= 0;
         end
         else begin
+            
             for(k = 0; k < num_decoders*FIFO_width; k = k + 1) begin
                 out_fields[1+messageID_size+$clog2(max_message_size)+beat_width:0] <= registers[1+messageID_size+$clog2(max_message_size)+beat_width:0];
             end
-            start_ptr <= start_ptr + num_decoders;
-            if(start_ptr == start_ptr*FIFO_width) begin
-                start_ptr <= 0;
-            end
             
+            for(k = 0; k < num_decoders; k = k + 1) begin
+                if(decoded_fields[k][messageID_size+$clog2(max_message_size)+beat_width]) begin // If decoded feild is valid
+                    registers[start_ptr + k][messageID_size+$clog2(max_message_size)+beat_width-1:0] <= decoded_fields[k][messageID_size+$clog2(max_message_size)+beat_width-1:0];
+                    start_ptr <= start_ptr + 1;
+                    if(start_ptr == num_decoders*FIFO_width) begin
+                        start_ptr <= 0;
+                    end
+                end
+            end   
         end
     end
 endmodule
