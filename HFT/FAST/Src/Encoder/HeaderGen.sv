@@ -21,45 +21,46 @@
 
 
 module HeaderGen #(
-    parameter max_message_size = 16,
+    parameter max_delta = 16,      
     parameter possible_message_types = 4,
-    parameter FIX_type_size = 2, // 2 bytes to represent FIX message type
-    parameter S_COMPID = 0,
-    parameter T_COMPID = 1,
-    parameter sq_num_size = 16, // Unknown 
-    parameter time_bits = 28,
-    parameter checksum_bits = 32,
-    parameter header_bits = 64 + $clog2(max_message_size) + FIX_type_size + 64 + 64 + sq_num_size + time_bits + 32 + checksum_bits,
+    parameter FIX_msg_type_bits = 16,  // 2 bytes for FIX
+    parameter sq_num_bits = $clog2(max_delta), 
+    parameter time_bits = $clog2(max_delta),
+    parameter CIOrdID_bits = 32,
+    parameter header_bits = sq_num_bits + time_bits + CIOrdID_bits,
     parameter clk_period = 10, // Assume 10 ns(100 MHz)
     parameter orders_generated = 4
     )(
     input logic rstn,
     input logic clk,
+    input logic [$clog2(max_delta)-1:0] incoming_seq_num,  // Poll from incoming messages 
     output logic [header_bits-1:0] header,
-    output logic [time_bits-1:0] real_time
+    output logic [15:0] message_size // Needed to compute bodylength and checksum downstream
     );
     
-    logic [63:0] begin_string;
-    logic [$clog2(max_message_size)-1:0] body_length;
-    logic [FIX_type_size-1:0] message_type;
-    logic [63:0] SenderCOMPID;
-    logic [63:0] TargetCOMPID;
-    logic [sq_num_size-1:0] MsgSeqNum;
+    /**
+     * FIELDS ENCODED : MsgSeqNum(Delta), SendingTime(Tail), CIOrdID(no op)
+     * FILEDS TODO DOWNSTREAM : BodyLength(delta), MsgType(no op), CheckSum(delta)
+     * CONSTANT FIELDS : BeginString, SenderCompID, TargetCompID
+     */
+    
+    // No Op Feilds
+    logic [CIOrdID_bits-1:0] CIOrdID;
+    
+    // Delta(internal previous)
+    logic [sq_num_bits-1:0] MsgSeqNum;
+    logic [sq_num_bits-1:0] PrevMsgSeqNum;
     logic [time_bits-1:0] SendingTime;
-    logic [31:0] CIOrdID;
-    logic [checksum_bits-1:0] CheckSum; 
+    logic [time_bits-1:0] CurrTime;
+    logic [time_bits-1:0] PrevTime;
+   
     
-    always_comb begin
-        begin_string = {8'h46, 8'h49, 8'h58, 8'h54, 8'h2e, 8'h31, 8'h2e, 8'h31}; // FIXT.1.1
-        SenderCOMPID = S_COMPID;
-        TargetCOMPID = T_COMPID;
-        CheckSum = 8 + 1 + 8 + 8 + 2 + 4 + 4 + 4; // Total bytes used for header + CIOrdID
-    end
-    
-    // Generator for time
-    logic [3:0] ms1, ms2, ms3, sec1, sec2, min1, min2, hour1, hour2;
-    assign SendingTime = {hour2, hour1, min2, min1, sec2, sec1, ms3, ms2, ms1};
-    assign real_time = SendingTime;
+    // Generator for time : ASCII
+    logic [5:0] colon, period;
+    assign colon = 58;
+    assign period = 46;
+    logic [5:0] ms1, ms2, ms3, sec1, sec2, min1, min2, hour1, hour2;
+    assign CurrTime = {hour2, hour1, colon, min2, min1, period, sec2, sec1, period, ms3, ms2, ms1};
     digitalClock #(.FREQ(100000000)) C1 (
         .clk(clk),
         .rstn(rstn),
@@ -74,6 +75,17 @@ module HeaderGen #(
         .hour2(hour2)
     );
     
+    // Tail Encode Time
+    assign SendingTime = CurrTime - PrevTime;
+    always_ff @(posedge clk or negedge rstn) begin
+        if(!rstn) begin
+            PrevTime <= 0;
+        end
+        else begin
+            PrevTime <= CurrTime; 
+        end
+    end 
+    
     
     // Need a generator for order ID(only for buy orders)
     RandomGen G1 (
@@ -83,17 +95,22 @@ module HeaderGen #(
     );
     
     // Sequence number
-    always_ff @(posedge clk) begin
-        if(rstn) begin
-            MsgSeqNum <= 0;
+    assign MsgSeqNum = (orders_generated + incoming_seq_num) - PrevMsgSeqNum; // Assume only "orders_generated" number added to sequence 
+    always_ff @(posedge clk or negedge rstn) begin
+        if(!rstn) begin
+            PrevMsgSeqNum <= 0;
         end
         else begin
-            MsgSeqNum <= MsgSeqNum + orders_generated;
+            PrevMsgSeqNum <= (orders_generated + incoming_seq_num); 
         end
-        
-        // Generator 1 header stream, then fill in message_type and checksum downstream
-        header <= {begin_string, body_length, message_type, SenderCOMPID, TargetCOMPID, MsgSeqNum, SendingTime, CIOrdID, CheckSum};
+    end 
+    
+    always_comb begin
+        message_size = 2 + 1 + 4; 
     end
+    
+    // Generator 1 header stream, then fill in message_type and checksum downstream
+    assign header = {MsgSeqNum, SendingTime, CIOrdID};
     
     
 endmodule
