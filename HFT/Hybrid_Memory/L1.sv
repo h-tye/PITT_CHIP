@@ -27,15 +27,16 @@ module L1 #(
     parameter price_bits = 16,
     parameter qty_bits = 16,
     parameter order_width = timestamp_bits + orderID_bits + price_bits + qty_bits,
-    parameter num_orders = 1 // Only 1 for now
+    parameter num_incoming_orders = 1 // Only 1 for now
     )(
     input logic clk,
     input logic rstn,
-    input logic PoI,   // Pull or Insert. 0 to pull from L2(fill). 1 to insert new orders(kill)
-    input logic [$clog2(num_orders)-1:0] orders_filled,
-    input logic [$clog2(num_orders)-1:0] inserted_orders,
-    input logic [order_width-1:0] incoming_orders [num_orders],  // Mux between external and L2
-    output logic [order_width-1:0] evicted_orders [num_orders]
+    input logic AoR, // Net negative orders -> remove orders from L1. Net positive orders -> add to L1, mutually exclusive
+    input logic [$clog2(num_incoming_orders)-1:0] num_orders, // Num orders to remove or to add(only based on fill, not cancelled)
+    input logic [$clog2(num_incoming_orders)-1:0] num_cancelled,
+    input logic [$clog2(L1_capacity)-1:0] cancelled_positions [num_incoming_orders], // positions of cancelled orders
+    input logic [order_width-1:0] incoming_orders [num_incoming_orders],  // Read incoming or L2
+    output logic [order_width-1:0] evicted_orders [num_incoming_orders]   // Evict orders to L2
     );
     
     // Construct cache
@@ -54,30 +55,42 @@ module L1 #(
             end
         end
         else begin
-            if(!PoI) begin
+            // Must perform cancellations first
+            for(i = 0; i < num_incoming_orders; i = i + 1) begin
+                if(cancelled_positions[i] == pos[i]) begin
+                    orders[cancelled_positions[i]] <= incoming_orders[count];
+                    pos[i] <= L1_capacity - (num_cancelled - count); // Send to back of queue  
+                    filled[i] <= 0;
+                    count = count + 1;
+                 end
+                 else begin
+                    pos[i] <= pos[i] - count;
+                 end
+            end
+            if(AoR) begin  // Remove orders
                 for(i = 0; i < L1_capacity; i = i + 1) begin
                     // If filled, adjust pos and insert L2 data
-                    if(pos[i] <= orders_filled) begin
-                        orders[i] <= incoming_orders[orders_filled - pos[i]];
-                        pos[i] <= (L1_capacity - orders_filled) + pos[i]; 
+                    if(pos[i] <= num_orders) begin
+                        orders[i] <= incoming_orders[num_cancelled + pos[i]];
+                        pos[i] <= (L1_capacity - num_orders) + pos[i]; 
                         filled[i] <= 0;
                     end
                     else begin
-                        pos[i] <= pos[i] - orders_filled;
+                        pos[i] <= pos[i] - num_orders;
                     end
                  end
              end
              else begin
                 for(i = 0; i < L1_capacity; i = i + 1) begin
                     // Evict bottom orders
-                    if(pos[i] > L1_capacity - inserted_orders) begin
-                        orders[i] <= incoming_orders[pos[i] - (L1_capacity - inserted_orders)];
-                        pos[i] <= pos[i] - (L1_capacity - inserted_orders);
+                    if(pos[i] > L1_capacity - num_orders) begin
+                        orders[i] <= incoming_orders[pos[i] - (L1_capacity - num_orders) + num_cancelled];
+                        pos[i] <= pos[i] - (L1_capacity - num_orders);
                         filled[i] <= 0;
-                        evicted_orders[pos[i] - (L1_capacity - inserted_orders)] <= orders[i];
-                    end
+                        evicted_orders[pos[i] - (L1_capacity - num_orders)] <= orders[i];
+                    end 
                     else begin
-                        pos[i] <= pos[i] + inserted_orders;
+                        pos[i] <= pos[i] + num_orders;
                     end
                  end
              end
