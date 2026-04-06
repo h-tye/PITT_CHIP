@@ -99,9 +99,7 @@ module MatchingEngine #(
     logic buy_pfilled [num_incoming_orders*2];
     logic sell_pfilled [num_incoming_orders*2];
     logic [qty_bits-1:0] residual_buy_qty [num_incoming_orders*2]; // Gives residual for each level
-    logic [qty_bits-1:0] residual_sell_qty [num_incoming_orders*2+1];
-    logic [order_width-1:0] input_buy_qty;
-    logic [order_width-1:0] input_sell_qty;
+    logic [qty_bits-1:0] residual_sell_qty [num_incoming_orders*2+1][num_incoming_orders*2+1];
     genvar r, c;
     generate
         
@@ -130,6 +128,9 @@ module MatchingEngine #(
         int r;
         for (r = 0; r < num_incoming_orders; r++) begin
             // Horizontal propagation (right), buffer between columns
+            if(residual_sell_qty[r][num_incoming_orders-1] == candidate_sells[r][qty_bits-1:0]) begin
+                stage_done[r] <= 1;
+            end
             if (c < num_incoming_orders-1) begin
                 candidate_buys[r+1][qty_bits-1:0] <= residual_buy_qty[r];
             end
