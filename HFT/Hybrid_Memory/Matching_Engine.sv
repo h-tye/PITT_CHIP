@@ -55,22 +55,28 @@ module MatchingEngine #(
     logic [price_bits-1:0] best_sell_price;
     assign best_buy_price = top_buys[0][price_bits+qty_bits-1 -: price_bits];
     assign best_sell_price = top_sells[0][price_bits+qty_bits-1 -: price_bits];
-    logic [order_width-1:0] candidate_buys [num_incoming_orders*2];
-    logic [order_width-1:0] candidate_sells [num_incoming_orders*2];
+    logic [order_width:0] candidate_buys [num_incoming_orders*2];     // Use extra bit to mark if new or not
+    logic [order_width:0] candidate_sells [num_incoming_orders*2];
     logic [$clog2(num_incoming_orders)-1:0] num_candidate_incoming_buy;
     logic [$clog2(num_incoming_orders)-1:0] num_candidate_incoming_sell;
+    logic [num_incoming_orders-1:0] new_candidate_buy;
+    logic [num_incoming_orders-1:0] new_candidate_sell;
     int i,n;
     always_comb begin
         num_candidate_incoming_buy = 0;
         num_candidate_incoming_sell = 0;
+        new_candidate_buy = 0;
+        new_candidate_sell = 0;
         for(i = 0; i < num_incoming_orders; i = i + 1) begin
             // If new order has better price insert at top of candidate buys
             if(new_buys[i][price_bits+qty_bits-1 -: price_bits] > best_buy_price) begin
-                candidate_buys[num_candidate_incoming_buy] = new_buys[i];
+                candidate_buys[num_candidate_incoming_buy] = {1'b1, new_buys[i]};
+                new_candidate_buy[i] = 1;
                 num_candidate_incoming_buy = num_candidate_incoming_buy + 1;
             end
             if(new_sells[i][price_bits+qty_bits-1 -: price_bits] < best_sell_price) begin
-                candidate_sells[num_candidate_incoming_sell] = new_sells[i];
+                candidate_sells[num_candidate_incoming_sell] = {1'b1,new_sells[i]};
+                new_candidate_sell[i] = 1;
                 num_candidate_incoming_sell = num_candidate_incoming_sell + 1;
             end
         end
@@ -83,11 +89,13 @@ module MatchingEngine #(
         // If same price as current top & top is about to be depelted, could potentially match
         for(i = 0; i < num_incoming_orders; i = i + 1) begin
             if(((new_buys[i][price_bits+qty_bits-1 -: price_bits] == best_buy_price) && (top_buy_tail <= L1_capacity))) begin
-                candidate_buys[num_incoming_orders + num_candidate_incoming_buy] = new_buys[i];
+                candidate_buys[num_incoming_orders + num_candidate_incoming_buy] = {1'b1,new_buys[i]};
+                new_candidate_buy[i] = 1;
                 num_candidate_incoming_buy = num_candidate_incoming_buy + 1;
             end
             if(((new_buys[i][price_bits+qty_bits-1 -: price_bits] == best_buy_price) && (top_buy_tail <= L1_capacity))) begin
-                candidate_sells[num_incoming_orders + num_candidate_incoming_sell] = new_sells[i];
+                candidate_sells[num_incoming_orders + num_candidate_incoming_sell] = {1'b1, new_sells[i]};
+                new_candidate_sell[i] = 1;
                 num_candidate_incoming_sell = num_candidate_incoming_sell + 1;
             end
         end
@@ -98,21 +106,32 @@ module MatchingEngine #(
     logic sell_filled [num_incoming_orders*2];
     logic buy_pfilled [num_incoming_orders*2];
     logic sell_pfilled [num_incoming_orders*2];
-    logic [qty_bits-1:0] residual_buy_qty [num_incoming_orders*2]; // Gives residual for each level
+    logic [qty_bits-1:0] residual_buy_qty [num_incoming_orders*2][num_incoming_orders*2+1];
     logic [qty_bits-1:0] residual_sell_qty [num_incoming_orders*2+1][num_incoming_orders*2+1];
+    logic core_en;
+    logic [$clog2(num_incoming_orders*2)-1:0] stage_num;
     genvar r, c;
     generate
-        
         // Grid Iron
-        for (r = 0; r < num_incoming_orders; r++) begin : row_loop
-            for (c = 0; c < num_incoming_orders; c++) begin : col_loop
+        for(r = 0; r < num_incoming_orders*2;r++) begin
+            for (c = 0; c < num_incoming_orders*2; c++) begin : col_loop
+            
+                always_comb begin
+                    if(r == stage_num || c == stage_num) begin
+                        core_en = 1;
+                    end
+                    else begin
+                        core_en = 0;
+                    end
+                end
                 Matching_Core core_inst (
                     .buy_price  (candidate_buys[r][price_bits+qty_bits-1 -: price_bits]),
                     .buy_qty    (candidate_buys[r][qty_bits-1:0]),
                     .sell_price (candidate_sells[c][price_bits+qty_bits-1 -: price_bits]),
-                    .sell_qty   (residual_sell_qty[c]),
-                    .next_buy_qty (residual_buy_qty[r]),
-                    .next_sell_qty (residual_sell_qty[c+1]),
+                    .sell_qty   (candidate_sells[c][qty_bits-1:0]),
+                    .en(core_en),
+                    .next_buy_qty (residual_buy_qty[r][c]),
+                    .next_sell_qty (residual_sell_qty[r][c]),
                     .buy_filled(buy_filled[r]),
                     .sell_filled(sell_filled[c]),
                     .buy_pfilled(buy_pfilled[r]),
@@ -123,31 +142,47 @@ module MatchingEngine #(
     endgenerate
     
     // Pipeline values
-    logic [num_incoming_orders-1:0] stage_done;
-    always_ff @(posedge clk) begin
-        int r;
-        for (r = 0; r < num_incoming_orders; r++) begin
-            // Horizontal propagation (right), buffer between columns
-            if(residual_sell_qty[r][num_incoming_orders-1] == candidate_sells[r][qty_bits-1:0]) begin
-                stage_done[r] <= 1;
-            end
-            if (c < num_incoming_orders-1) begin
-                candidate_buys[r+1][qty_bits-1:0] <= residual_buy_qty[r];
-            end
-        end
-    end
-    
-    // Evaluation of chain
-    // Go through each new order and check:
-    // If not filled -> will be sent to L1 or L2
-    //     Keep tally of filled orders, depedending on the amount filled will either go to L1 or L2
-    //     If num_incoming_orders - orders_filled > L1_capacity, some will be demoted to L2
-    //     Else they go to L1
-    // If filled -> kill here and don't send
     logic done_eval;
     logic [$clog2(num_incoming_orders)-1:0] num_orders_filled_buy;
     logic [$clog2(num_incoming_orders)-1:0] num_orders_filled_sell;
     logic [$clog2(num_incoming_orders)-1:0] new_orders_filled_buy;
+    logic [$clog2(num_incoming_orders)-1:0] new_orders_filled_sell;
+    always_ff @(posedge clk or negedge rstn) begin
+        int r,c;
+        if(!rstn) begin
+            stage_num <= 0;
+        end
+        else begin
+            stage_num <= stage_num + 1;
+            for (r = 0; r < num_incoming_orders*2; r++) begin
+                for(c = 0; c < num_incoming_orders*2;c++) begin
+                    // Horizontal propagation (right)
+                    if(r == stage_num) begin
+                        candidate_buys[r][c+1][qty_bits-1:0] <= residual_buy_qty[r][c];
+                    end
+                    // Vertical progagation (below)
+                    if(c == stage_num) begin
+                        candidate_sells[r+1][c][qty_bits-1:0] <= residual_sell_qty[r][c];
+                    end
+                end
+            end
+            if(residual_sell_qty[stage_num][num_incoming_orders*2-1] == 0) begin
+                num_orders_filled_sell = num_orders_filled_sell + 1;
+                new_orders_filled_sell = new_orders_filled_sell + candidate_sells[stage_num][order_width];  // Marked new
+            end
+            if(residual_buy_qty[stage_num][num_incoming_orders*2-1] == 0) begin
+                num_orders_filled_buy = num_orders_filled_buy + 1;
+                new_orders_filled_buy = new_orders_filled_buy + candidate_buys[stage_num][order_width];
+            end
+            if(residual_sell_qty[stage_num][num_incoming_orders*2-1] == candidate_sells[stage_num][qty_bits-1:0] && 
+                residual_buy_qty[stage_num][num_incoming_orders*2-1] == candidate_buys[stage_num][qty_bits-1:0]) begin
+                done_eval <= 1;
+            end
+        end
+    end
+    
+
+    
     
     
     
@@ -180,25 +215,36 @@ module MatchingEngine #(
             end
         end
     end
+    
     // Add orders to cache
+    int j;
     always_comb begin
         if(done_eval) begin
-            for(i = 0; i < num_incoming_orders; i = i + 1) begin
+        
+            // L1 memory
+            for(i = 0; i < num_incoming_orders*2; i = i + 1) begin
                 // Buy
-                if(new_buys[i][price_bits+qty_bits-1 -: price_bits] > best_buy_price && filled[i] == 0) begin
+                if(residual_buy_qty[i][num_incoming_orders*2-1] == 0) begin     // If not filled, has to go back to L1
                     outgoing_orders_buy[i][order_width-1 -: 3] = 3'b001;  // To L1
                     outgoing_orders_buy[i][order_width-5] = 1'b1;         // Insert into start of queue
-                    outgoing_orders_buy[i][order_width-5:0] = new_buys[i];
+                    outgoing_orders_buy[i][order_width-5:0] = candidate_buys[i];
                 end
-                else if(new_buys[i][price_bits+qty_bits-1 -: price_bits] == best_buy_price && top_buy_tail < L1_capacity) begin
-                    outgoing_orders_buy[i][order_width-1 -: 3] = 3'b001;  // To L1
-                    outgoing_orders_buy[i][order_width-5] = 1'b0;         // Insert into end of FIFO
-                    outgoing_orders_buy[i][order_width-5:0] = new_buys[i];
+                // Sell
+                if(candidate_sells[i][price_bits+qty_bits-1 -: price_bits] > best_sell_price && residual_sell_qty[i][num_incoming_orders*2-1] == 0) begin
+                    outgoing_orders_sell[i][order_width-1 -: 3] = 3'b001;  // To L1
+                    outgoing_orders_sell[i][order_width-5] = 1'b1;         // Insert into start of queue
+                    outgoing_orders_sell[i][order_width-5:0] = new_sells[i];
                 end
-                else if(new_buys[i][price_bits+qty_bits-1 -: price_bits] == best_buy_price && top_buy_tail < L2_capacity) begin
+            end
+            
+            // New order handling
+            for(j = 0; j < num_incoming_orders; j++) begin
+                if(new_buys[i][price_bits+qty_bits-1 -: price_bits] == best_buy_price && 
+                top_buy_tail < L2_capacity + num_orders_buy_added && top_buy_tail > L1_capacity + num_orders_buy_added
+                && !new_candidate_buy[i]) begin
                     outgoing_orders_buy[i][order_width-1 -: 3] = 3'b010;  // To L2
                     outgoing_orders_buy[i][order_width-5] = 1'b0;         // Insert into end of FIFO
-                    outgoing_orders_buy[i][order_width-5:0] = new_buys[i];
+                    outgoing_orders_buy[i][order_width-5:0] = candidate_buys[i];
                 end
                 else begin
                     outgoing_orders_buy[i][order_width-1 -: 3] = 3'b100;  // To CPU
@@ -207,18 +253,10 @@ module MatchingEngine #(
                 end
                 
                 // Sell
-                if(new_sells[i][price_bits+qty_bits-1 -: price_bits] > best_sell_price && filled[i] == 0) begin
-                    outgoing_orders_sell[i][order_width-1 -: 3] = 3'b001;  // To L1
-                    outgoing_orders_sell[i][order_width-5] = 1'b1;         // Insert into start of queue
-                    outgoing_orders_sell[i][order_width-5:0] = new_sells[i];
-                end
-                else if(new_sells[i][price_bits+qty_bits-1 -: price_bits] == best_sell_price && top_sell_tail < L1_capacity) begin
-                    outgoing_orders_sell[i][order_width-1 -: 3] = 3'b001;  // To L1
-                    outgoing_orders_sell[i][order_width-5] = 1'b0;         // Insert into end of FIFO
-                    outgoing_orders_sell[i][order_width-5:0] = new_buys[i];
-                end
-                else if(new_sells[i][price_bits+qty_bits-1 -: price_bits] == best_sell_price && top_sell_tail < L2_capacity) begin
-                    outgoing_orders_sell[i][order_width-1 -: 3] = 3'b010;  // To L2
+                if(new_sells[i][price_bits+qty_bits-1 -: price_bits] == best_sell_price && 
+                top_sell_tail < L2_capacity + num_orders_sell_added && top_sell_tail > L1_capacity + num_orders_sell_added
+                && !new_candidate_sell) begin
+                    outgoing_orders_sell[i][order_width-1 -: 3] = 3'b001;  // To L2
                     outgoing_orders_sell[i][order_width-5] = 1'b0;         // Insert into end of FIFO
                     outgoing_orders_sell[i][order_width-5:0] = new_buys[i];
                 end
