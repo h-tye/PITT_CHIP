@@ -21,33 +21,31 @@
 
 
 module MatchingEngine #(
-    parameter aggr_cache_capacity = 128,
     parameter L1_capacity = 8,
+    parameter L2_capacity = 120,
     parameter timestamp_bits = 32,
     parameter orderID_bits = 16,
     parameter price_bits = 16,
     parameter qty_bits = 16,
-    parameter order_width = timestamp_bits + orderID_bits + price_bits + qty_bits,
+    parameter order_locations = 3,  // L1, L2, or CPU
+    parameter FoB = 1,              // Insert/remove from front or back
+    parameter order_width = order_locations + FoB + timestamp_bits + orderID_bits + price_bits + qty_bits,
     parameter num_incoming_orders = 1
     )(
     input logic clk,
     input logic rstn,
-    input logic [order_width-1:0] new_buys [num_incoming_orders],     // Coming from FIFO
-    input logic [order_width-1:0] new_sells [num_incoming_orders],
-    input logic [order_width-3:0] top_buys [num_incoming_orders],
-    input logic [$clog2(aggr_cache_capacity)-1:0] top_buy_tail,
-    input logic [$clog2(aggr_cache_capacity)-1:0] top_sell_tail,
-    input logic [order_width-3:0] top_sells [num_incoming_orders],
-    output logic [$clog2(num_incoming_orders)-1:0] num_orders_buy,       // Number to add or remove(not including cancels)
-    output logic [$clog2(num_incoming_orders)-1:0] num_orders_sell,
-    output logic [order_width-1:0] to_CPU_buy,
-    output logic [order_width-1:0] to_CPU_sell,
-    output logic [order_width-1:0] to_L1_buy,
-    output logic [order_width-1:0] to_L1_sell,
-    output logic [order_width-1:0] to_L2_buy,
-    output logic [order_width-1:0] to_L2_sell,
-    output logic AoR_buy,  // Signal net positive(add) or negative(remove)
-    output logic AoR_sell,
+    input logic [order_width-5:0] new_buys [num_incoming_orders],     // Coming from stream FIFO
+    input logic [order_width-5:0] new_sells [num_incoming_orders],
+    input logic [order_width-5:0] top_buys [num_incoming_orders],     // Top of the order book(potentially matchable trades)
+    input logic [order_width-5:0] top_sells [num_incoming_orders],    // -5 for FoB + order_locations, don't need to store
+    input logic [$clog2(L1_capacity + L2_capacity)-1:0] top_buy_tail,
+    input logic [$clog2(L1_capacity + L2_capacity)-1:0] top_sell_tail,
+    output logic [$clog2(num_incoming_orders)-1:0] num_orders_buy_added,
+    output logic [$clog2(num_incoming_orders)-1:0] num_orders_buy_removed,
+    output logic [$clog2(num_incoming_orders)-1:0] num_orders_sell_added,
+    output logic [$clog2(num_incoming_orders)-1:0] num_orders_sell_removed,
+    output logic [order_width-1:0] outgoing_orders_buy [num_incoming_orders],
+    output logic [order_width-1:0] outgoing_orders_sell [num_incoming_orders],
     output logic done  // Signals completion to cache and hash table  
     );
     
@@ -154,58 +152,69 @@ module MatchingEngine #(
     //    in this case, num_orders = num_incoming_matchable_orders - num_orders_filled
     
     
-    int count_L1_buy, count_L1_sell, count_L2_buy, count_L2_sell, count_CPU_buy, count_CPU_sell;
+    // Remove cache orders
     always_comb begin
-        if(num_orders_filled_buy > num_candidate_incoming_buy) begin
-            AoR_buy = 1;
-            num_orders_buy = num_orders_filled_buy - num_candidate_incoming_buy;
+        if(num_orders_filled_buy > num_incoming_orders) begin
+            num_orders_buy_removed =  num_orders_filled_buy - num_incoming_orders;
         end
         else begin
-            AoR_buy = 0;
-            num_orders_buy = num_candidate_incoming_buy - num_orders_filled_buy;
+            num_orders_buy_added = num_incoming_orders - num_orders_filled_buy;
         end
         if(num_orders_filled_sell > num_candidate_incoming_sell) begin
-            AoR_sell = 1;
-            num_orders_sell = num_orders_filled_sell - num_candidate_incoming_sell;
+            num_orders_sell_removed =  num_orders_filled_sell - num_incoming_orders;
         end
         else begin
-            AoR_sell = 0;
-            num_orders_sell = num_candidate_incoming_sell - num_orders_filled_sell;
+            num_orders_sell_added = num_incoming_orders - num_orders_filled_sell;
         end
     end
+    // Add orders to cache
     always_comb begin
-        // Process orders for outgoing
-        count_L1_buy = 0;
-        count_L1_sell = 0;
-        count_L2_buy = 0;
-        count_L2_sell = 0;
-        count_CPU_buy = 0;
-        count_CPU_sell = 0;
         for(i = 0; i < num_incoming_orders; i = i + 1) begin
-            if(i <= num_candidate_incoming_buy && filled[i] == 0) begin  // Insert into L1 cache
-                to_L1_buy[count_L1_buy] = new_buys[i];
-                count_L1_buy = count_L1_buy + 1;
+            // Buy
+            if(new_buys[i][price_bits+qty_bits-1 -: price_bits] > best_buy_price && filled[i] == 0) begin
+                outgoing_orders_buy[i][order_width-1 -: 3] = 3'b001;  // To L1
+                outgoing_orders_buy[i][order_width-5] = 1'b1;         // Insert into start of queue
+                outgoing_orders_buy[i][order_width-5:0] = new_buys[i];
             end
-            else if(new_buys[i][price_bits+qty_bits-1 -: price_bits] == best_buy_price && top_buy_tail < aggr_cache_capacity) begin
-                to_L2_buy[count_L2_buy] = new_buys[i];
-                count_L2_buy = count_L2_buy + 1;
+            else if(new_buys[i][price_bits+qty_bits-1 -: price_bits] == best_buy_price && top_buy_tail < L1_capacity) begin
+                outgoing_orders_buy[i][order_width-1 -: 3] = 3'b001;  // To L1
+                outgoing_orders_buy[i][order_width-5] = 1'b0;         // Insert into end of FIFO
+                outgoing_orders_buy[i][order_width-5:0] = new_buys[i];
             end
-            else begin
-                to_CPU_buy[count_CPU_buy] = new_buys[i];
-                count_CPU_buy = count_CPU_buy + 1;
-            end
-            if(i <= num_candidate_incoming_sell && !orders_filled[i]) begin  // Insert into L1 cache
-                to_L1_sell[count_L1_sell] = new_sells[i];
-                count_L1_sell = count_L1_sell + 1;
-            end
-            else if(new_sells[i][price_bits+qty_bits-1 -: price_bits] == best_sell_price && top_sell_tail < aggr_cache_capacity) begin
-                to_L2_sell[count_L2_buy] = new_sells[i];
-                count_L2_sell = count_L2_sell + 1;
+            else if(new_buys[i][price_bits+qty_bits-1 -: price_bits] == best_buy_price && top_buy_tail < L2_capacity) begin
+                outgoing_orders_buy[i][order_width-1 -: 3] = 3'b010;  // To L2
+                outgoing_orders_buy[i][order_width-5] = 1'b0;         // Insert into end of FIFO
+                outgoing_orders_buy[i][order_width-5:0] = new_buys[i];
             end
             else begin
-                to_CPU_sell[count_CPU_sell] = new_sells[i];
-                count_CPU_sell = count_CPU_sell + 1;
+                outgoing_orders_buy[i][order_width-1 -: 3] = 3'b100;  // To CPU
+                outgoing_orders_buy[i][order_width-5] = 1'b0;         // don't care
+                outgoing_orders_buy[i][order_width-5:0] = new_buys[i];
             end
-        end     
-    end            
+            
+            // Sell
+            if(new_sells[i][price_bits+qty_bits-1 -: price_bits] > best_sell_price && filled[i] == 0) begin
+                outgoing_orders_sell[i][order_width-1 -: 3] = 3'b001;  // To L1
+                outgoing_orders_sell[i][order_width-5] = 1'b1;         // Insert into start of queue
+                outgoing_orders_sell[i][order_width-5:0] = new_sells[i];
+            end
+            else if(new_sells[i][price_bits+qty_bits-1 -: price_bits] == best_sell_price && top_sell_tail < L1_capacity) begin
+                outgoing_orders_sell[i][order_width-1 -: 3] = 3'b001;  // To L1
+                outgoing_orders_sell[i][order_width-5] = 1'b0;         // Insert into end of FIFO
+                outgoing_orders_sell[i][order_width-5:0] = new_buys[i];
+            end
+            else if(new_sells[i][price_bits+qty_bits-1 -: price_bits] == best_sell_price && top_sell_tail < L2_capacity) begin
+                outgoing_orders_sell[i][order_width-1 -: 3] = 3'b010;  // To L2
+                outgoing_orders_sell[i][order_width-5] = 1'b0;         // Insert into end of FIFO
+                outgoing_orders_sell[i][order_width-5:0] = new_buys[i];
+            end
+            else begin
+                outgoing_orders_sell[i][order_width-1 -: 3] = 3'b100;  // To CPU
+                outgoing_orders_sell[i][order_width-5] = 1'b0;         // don't care, has to go to back
+                outgoing_orders_sell[i][order_width-5:0] = new_buys[i];
+            end
+        end
+    end
+
+                      
 endmodule
