@@ -48,10 +48,10 @@ module L1 #(
     // Construct cache
     logic [order_width-5:0] orders [L1_capacity]; 
     logic [$clog2(L1_capacity)-1:0] pos [L1_capacity];  // pos[i] = entry location of order i
-    logic [$clog2(L1_capacity)-1:0] temp_pos [L1_capacity];
+    logic [$clog2(L1_capacity)-1:0] pos_queue [L1_capacity];
     
-    integer i,j;
-    integer count, count1;
+    integer i,j,k;
+    integer can_count, top_ptr, local_tail_ptr;
     always_ff @(posedge clk or negedge rstn) begin
         if(!rstn) begin
             for(i = 0; i < L1_capacity; i = i + 1) begin
@@ -64,34 +64,42 @@ module L1 #(
             for(j = 0; j < num_cancelled; j++) begin
                 orders[pos[cancelled_orders[j]]] <= L2_orders[j];
             end
-            count = 0;
-            temp_pos = pos;
+            can_count = 0;
             // Update positions
             for(j = L1_capacity - 1; j >= 0; j--) begin
-                if(count < num_cancelled) begin
-                    pos[j] = pos[cancelled_orders[num_cancelled-count+1]];
-                    count = count + 1;
-                    pos[pos[j]] = temp_pos[pos[j] + (num_cancelled-count+1)];
+                if(j >= L1_capacity - num_cancelled) begin
+                    pos_queue[can_count] = pos[j-can_count];
+                    pos[j] = pos[cancelled_orders[num_cancelled-(can_count+1)]]; // Push cancelled to back of queue
+                    can_count = can_count + 1;
+                end
+                else if(can_count > 0) begin
+                    pos[j] = pos_queue[num_cancelled-can_count];
+                    can_count = can_count -1;
                 end
             end
             
-            
-            L1_top_ptr = 0; // Initialize to 0
+            top_ptr = 0;
             local_tail_ptr = top_level_tail_ptr;
             if(done_matching) begin  // Add or remove orders to/from order book based on matching
+                // First handle incoming order
                 for(i = 0; i < num_incoming_orders*2; i++) begin
                     if(new_orders[i][order_width-1 -: 3] == 3'b001) begin
-                        if(new_orders[order_width-4]) begin  // Insert into top
-                            orders[L1_top_ptr] <= new_orders[i][order_width-5:0]; // Disregard header info
-                            L1_top_ptr = L1_top_ptr + 1;
+                        if(new_orders[i][order_width-4]) begin  // Insert into top
+                            if(top_ptr >= num_incoming_orders) begin // Can't insert into top_ptr, have to insert into evicted location
+                                evicted_orders[top_ptr - num_incoming_orders] <= orders[pos[L1_capacity-1-(top_ptr-num_incoming_orders)]];
+                                orders[pos[L1_capacity-1-(top_ptr-num_incoming_orders)]] <= new_orders[i][order_width-5:0];
+                            end
+                            else begin // Else can just replace previous
+                                orders[pos[top_ptr]] <= new_orders[i][order_width-5:0]; // Disregard header info
+                                top_ptr = top_ptr + 1;
+                            end
                         end
                         else begin
-                            orders[local_tail_ptr] <= new_orders[i][order_width-5:0];
+                            orders[local_tail_ptr + num_orders_added] <= new_orders[i][order_width-5:0]; // Account for new orders
                             local_tail_ptr = local_tail_ptr + 1;
+                            evicted_orders[(local_tail_ptr - top_level_tail_ptr)] <= orders[pos[L1_capacity-1-(local_tail_ptr - top_level_tail_ptr)]];
                         end
                     end
-                    //Handle eviction
-                    if(L1_top_ptr >= num_incoming_orders || 
                 end
             end
         end
