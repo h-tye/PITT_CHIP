@@ -101,6 +101,14 @@ module L1 #(
                         top_ptr = top_ptr + 1;
                     end
                 end
+                
+                // Handle removal, at most can remove orders we sent to engine
+                for(i=0; i < L1_capacity;i++) begin
+                    orders[pos[i]] <= L2_orders[i+num_cancelled]; // Account for L2 used to fill in cancelled
+                end
+                for(i = 0; i < L1_capacity - num_orders_removed; i++) begin
+                    pos[i] = pos[i + num_orders_removed];
+                end
             end
         end
      end
