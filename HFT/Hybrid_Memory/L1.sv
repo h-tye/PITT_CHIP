@@ -48,7 +48,7 @@ module L1 #(
     // Construct cache
     logic [order_width-5:0] orders [L1_capacity]; 
     logic [$clog2(L1_capacity)-1:0] pos [L1_capacity];  // pos[i] = entry location of order i
-    logic [$clog2(L1_capacity)-1:0] temp_pos;
+    logic [$clog2(L1_capacity)-1:0] temp_pos [L1_capacity];
     
     integer i,j;
     integer count, count1;
@@ -65,14 +65,13 @@ module L1 #(
                 orders[pos[cancelled_orders[j]]] <= L2_orders[j];
             end
             count = 0;
-            count1 = 0;
+            temp_pos = pos;
             // Update positions
             for(j = L1_capacity - 1; j >= 0; j--) begin
-                if(count < num_cancelled) begin  // Perform swap -> See notes
-                    temp_pos = pos[j];
+                if(count < num_cancelled) begin
                     pos[j] = pos[cancelled_orders[num_cancelled-count+1]];
                     count = count + 1;
-                    pos[pos[j]] = temp_pos;
+                    pos[pos[j]] = temp_pos[pos[j] + (num_cancelled-count+1)];
                 end
             end
             
