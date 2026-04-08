@@ -79,7 +79,7 @@ module L1 #(
             end
             
             top_ptr = 0;
-            local_tail_ptr = top_level_tail_ptr;
+            local_tail_ptr = top_level_tail_ptr + num_orders_added;
             if(done_matching) begin  // Add or remove orders to/from order book based on matching
                 // First handle incoming order
                 for(i = 0; i < num_incoming_orders*2; i++) begin
@@ -91,14 +91,14 @@ module L1 #(
                             end
                             else begin // Else can just replace previous
                                 orders[pos[top_ptr]] <= new_orders[i][order_width-5:0]; // Disregard header info
-                                top_ptr = top_ptr + 1;
                             end
                         end
                         else begin
-                            orders[local_tail_ptr + num_orders_added] <= new_orders[i][order_width-5:0]; // Account for new orders
-                            local_tail_ptr = local_tail_ptr + 1;
+                            orders[local_tail_ptr] <= new_orders[i][order_width-5:0]; // Account for new orders
                             evicted_orders[(local_tail_ptr - top_level_tail_ptr)] <= orders[pos[L1_capacity-1-(local_tail_ptr - top_level_tail_ptr)]];
+                            local_tail_ptr = local_tail_ptr + 1;
                         end
+                        top_ptr = top_ptr + 1;
                     end
                 end
             end
