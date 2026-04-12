@@ -106,7 +106,7 @@ module L1 #(
     
     integer i,j,k;
     logic [$clog2(num_incoming_orders)-1:0] can_count;
-    logic [$clog2(L1_capacity)-1:0] top_ptr, insert_ptr;
+    logic [$clog2(L1_capacity)-1:0] top_ptr, insert_ptr, temp_ptr;
     logic [$clog2(L1_capacity+L2_capacity)-1:0] local_tail_ptr;
     logic test;
     
@@ -166,12 +166,11 @@ module L1 #(
                         if(top_ptr >= num_incoming_orders) begin // Can't insert into top_ptr, have to insert into evicted location
                             evicted_orders[top_ptr - num_incoming_orders] <= orders[pos[insert_ptr]];
                             orders[pos[insert_ptr]] <= new_orders[i][order_width-5:0];
-                            // Have to update positions, same approach as cancel: ring
-//                            for(j = 0; j < L1_capacity - num_incoming_orders; j++) begin
-//                                pos[insert_ptr - i] = pos[insert_ptr - i - 1];
-//                            end
-//                            pos[num_incoming_orders] = insert_ptr;
-//                            insert_ptr = pos[insert_ptr - 1];
+                            temp_ptr = pos[L1_capacity-1];
+                            for(j = L1_capacity; j >= num_incoming_orders; j--) begin
+                                pos[j] = pos[j-1];
+                            end
+                            pos[num_incoming_orders] = temp_ptr;
                         end
                         else begin // Else can just replace previous
                             orders[pos[top_ptr]] <= new_orders[i][order_width-5:0]; // Disregard header info
