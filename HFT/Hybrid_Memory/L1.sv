@@ -108,7 +108,7 @@ module L1 #(
     logic [$clog2(num_incoming_orders)-1:0] can_count;
     logic [$clog2(L1_capacity)-1:0] top_ptr, insert_ptr, temp_ptr;
     logic [$clog2(L1_capacity+L2_capacity)-1:0] local_tail_ptr;
-    logic test;
+    logic L1_full, test;
     
     // Send top of OB to matching engine
     always_comb begin
@@ -130,6 +130,7 @@ module L1 #(
             j <= 0;
             test <= 0;
             insert_ptr <= num_incoming_orders;
+            L1_full <= 0;
         end
         else if(next_state == CANCEL) begin
             // Must perform cancellations first, independent of filling of orders
@@ -151,13 +152,7 @@ module L1 #(
             end
         end
         else if(next_state == ADD_REMOVE) begin
-            if(local_tail_ptr < L1_capacity) begin
-                insert_ptr = local_tail_ptr;
-            end
-            else begin
-                insert_ptr = pos[L1_capacity-1];
-            end
-            local_tail_ptr = top_level_tail_ptr + num_orders_added;
+            local_tail_ptr = top_level_tail_ptr + num_orders_added; // Allow seperation for overflow orders
             top_ptr = 0;
             // First handle incoming order
             for(i = 0; i < num_incoming_orders*2; i++) begin
@@ -166,11 +161,12 @@ module L1 #(
                         if(top_ptr >= num_incoming_orders) begin // Can't insert into top_ptr, have to insert into evicted location
                             evicted_orders[top_ptr - num_incoming_orders] <= orders[pos[insert_ptr]];
                             orders[pos[insert_ptr]] <= new_orders[i][order_width-5:0];
-                            temp_ptr = pos[L1_capacity-1];
-                            for(j = L1_capacity; j >= num_incoming_orders; j--) begin
-                                pos[j] = pos[j-1];
-                            end
-                            pos[num_incoming_orders] = temp_ptr;
+                            // Should only do this when full
+//                            temp_ptr = pos[L1_capacity-1];
+//                            for(j = L1_capacity; j >= num_incoming_orders; j--) begin
+//                                pos[j] = pos[j-1];
+//                            end
+//                            pos[num_incoming_orders] = temp_ptr;
                         end
                         else begin // Else can just replace previous
                             orders[pos[top_ptr]] <= new_orders[i][order_width-5:0]; // Disregard header info
@@ -183,6 +179,14 @@ module L1 #(
                         local_tail_ptr = local_tail_ptr + 1;
                     end
                 end
+            end
+            if(local_tail_ptr < L1_capacity) begin
+                insert_ptr <= local_tail_ptr;
+                L1_full <= 0;
+            end
+            else begin
+                insert_ptr <= pos[L1_capacity-1];
+                L1_full <= 1;
             end
             // Handle removal, at most can remove orders we sent to engine
             for(i= L1_capacity - num_orders_removed; i < L1_capacity;i++) begin
