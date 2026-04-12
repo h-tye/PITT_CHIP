@@ -161,12 +161,14 @@ module L1 #(
                         if(top_ptr >= num_incoming_orders) begin // Can't insert into top_ptr, have to insert into evicted location
                             evicted_orders[top_ptr - num_incoming_orders] <= orders[pos[insert_ptr]];
                             orders[pos[insert_ptr]] <= new_orders[i][order_width-5:0];
-                            // Should only do this when full
-//                            temp_ptr = pos[L1_capacity-1];
-//                            for(j = L1_capacity; j >= num_incoming_orders; j--) begin
-//                                pos[j] = pos[j-1];
-//                            end
-//                            pos[num_incoming_orders] = temp_ptr;
+                            // Should only do this when full, extremely inefficient
+                            if(L1_full) begin
+                                temp_ptr = pos[L1_capacity-1];
+                                for(j = L1_capacity; j >= num_incoming_orders; j--) begin
+                                    pos[j] = pos[j-1];
+                                end
+                                pos[num_incoming_orders] = temp_ptr;
+                            end
                         end
                         else begin // Else can just replace previous
                             orders[pos[top_ptr]] <= new_orders[i][order_width-5:0]; // Disregard header info
@@ -180,7 +182,7 @@ module L1 #(
                     end
                 end
             end
-            if(local_tail_ptr < L1_capacity) begin
+            if(local_tail_ptr < L1_capacity-1) begin
                 insert_ptr <= local_tail_ptr;
                 L1_full <= 0;
             end
