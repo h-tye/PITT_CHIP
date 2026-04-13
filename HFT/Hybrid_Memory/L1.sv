@@ -44,26 +44,29 @@ module L1 #(
     input logic [order_width-1:0] new_orders [num_incoming_orders*2],  // Read incoming new orders
     input logic [order_width-5:0] L2_orders [num_incoming_orders],     // Top of L2 orders
     output logic [order_width-5:0] top_orders [num_incoming_orders],   // To matching engine
-    output logic [order_width-1:0] evicted_orders [num_incoming_orders],   // Evict orders to L2
+    output logic [order_width-5:0] evicted_orders [num_incoming_orders],   // Evict orders to L2
     output logic L1_sorted // Send to matching engine
     );
     
     // Construct cache
     logic [order_width-5:0] orders [L1_capacity]; 
     logic [$clog2(L1_capacity)-1:0] pos [L1_capacity];  // pos[i] = entry location of order i
+    logic [$clog2(num_incoming_orders)-1:0] canc_tally [L1_capacity];
     logic [$clog2(L1_capacity)-1:0] pos_queue [L1_capacity];
+    logic [order_width-5:0] holding_buffer [num_incoming_orders]; // Additional bit to show if used
+    logic [$clog2(num_incoming_orders)-1:0] num_holding;
     
     // State transition
     typedef enum logic [1:0] {
-        RST,
+        IDLE,
         CANCEL,
-        IDLE,     
-        ADD_REMOVE
+        REMOVE,   
+        ADD
     } state_t;
     state_t state, next_state;
     always_ff @(posedge clk or negedge rstn) begin
         if(!rstn) begin
-            state <= RST;
+            state <= IDLE;
         end
         else begin
             state <= next_state;
@@ -72,20 +75,29 @@ module L1 #(
     
     // Compute next stage
     always_comb begin
-        if(state == RST) begin
-            if(!rstn) begin
-                next_state = RST;
+        if(state == IDLE) begin
+            if(L2_orders_ready && (num_cancelled > 0)) begin
+                next_state = CANCEL;
+            end
+            else if(done_matching && num_orders_removed > 0) begin
+                next_state = REMOVE;
+            end
+            else if(done_matching) begin
+                next_state = ADD;
             end
             else begin
-                next_state = CANCEL;
+                next_state = IDLE;
             end
             L1_sorted = 0;
         end
         else if(state == CANCEL) begin
-            if(done_matching) begin
-                next_state = ADD_REMOVE;
+            if(done_matching && num_orders_removed > 0) begin
+                next_state = REMOVE;
             end
-            else if(L2_orders_ready) begin
+            else if(done_matching) begin
+                next_state = ADD;
+            end
+            else if(L2_orders_ready && (num_cancelled > 0)) begin
                 next_state = CANCEL;   // Can continue to cancel, not dependent on matching
             end
             else begin
@@ -93,9 +105,18 @@ module L1 #(
             end
             L1_sorted = 0;
         end
-        else if(state == ADD_REMOVE) begin
-            if(L2_orders_ready) begin
+        else if(state == REMOVE) begin
+            next_state = ADD;
+        end
+        else if(state == ADD) begin
+            if(L2_orders_ready && (num_cancelled > 0)) begin
                 next_state = CANCEL; 
+            end
+            else if(done_matching && num_orders_removed > 0) begin
+                next_state = REMOVE;
+            end
+            else if(done_matching) begin
+                next_state = ADD;
             end
             else begin
                 next_state = IDLE; // Can't rematch unless cancels are done first
@@ -104,9 +125,8 @@ module L1 #(
         end
     end
     
-    integer i,j,k;
-    logic [$clog2(num_incoming_orders)-1:0] can_count;
-    logic [$clog2(L1_capacity)-1:0] top_ptr, insert_ptr, temp_ptr;
+    integer i,j,k,m,n;
+    logic [$clog2(L1_capacity)-1:0] top_ptr, insert_ptr, temp_ptr, stop_idx, canc_count;
     logic [$clog2(L1_capacity+L2_capacity)-1:0] local_tail_ptr;
     logic L1_full, test;
     
@@ -122,44 +142,83 @@ module L1 #(
                 orders[i] <= 0;
                 pos[i] <= i;
                 pos_queue[i] <= 0;
+                canc_tally[i] <= 0;
+                evicted_orders[i] <= 0;
             end
-            can_count <= 0;
             top_ptr <= 0;
             local_tail_ptr <= num_incoming_orders;
             i <= 0;
             j <= 0;
+            m <= 0;
             test <= 0;
             insert_ptr <= num_incoming_orders;
             L1_full <= 0;
+            canc_count <= 0;
         end
         else if(next_state == CANCEL) begin
             // Must perform cancellations first, independent of filling of orders
-            for(j = 0; j < num_cancelled; j++) begin
-                orders[pos[cancelled_orders[j]]] <= L2_orders[j];
+            // Produce neccessary meta info
+            canc_count = 0;
+            for(i = 0; i < L1_capacity; i = i + 1) begin
+                if((i == cancelled_orders[canc_count]) || ((i+canc_count) == cancelled_orders[canc_count])) begin
+                    canc_count = canc_count + 1;
+                end
+                canc_tally[i] = canc_count;
             end
-            can_count = 0;
+            // Insert new orders
+            for(j = 0; j < num_cancelled; j++) begin
+                if(j < num_holding) begin
+                    orders[pos[cancelled_orders[j]]] <= holding_buffer[j];
+                    holding_buffer[j] <= 0;
+                    num_holding <= num_holding - 1;
+                end
+                else begin
+                    orders[pos[cancelled_orders[j]]] <= L2_orders[j - num_holding];
+                end
+                pos_queue[j] = pos[cancelled_orders[j]];
+            end
             // Update positions
-            for(j = L1_capacity - 1; j >= 0; j--) begin
-                if(j >= L1_capacity - num_cancelled) begin
-                    pos_queue[can_count] = pos[j-can_count];
-                    pos[j] = pos[cancelled_orders[num_cancelled-(can_count+1)]]; // Push cancelled to back of queue
-                    can_count = can_count + 1;
-                end
-                else if(can_count > 0) begin
-                    pos[j] = pos_queue[num_cancelled-can_count];
-                    can_count = can_count -1;
-                end
+            if(L1_full) begin
+                stop_idx = L1_capacity - 1;
+            end
+            else begin
+                stop_idx = local_tail_ptr;
+            end
+            for(i = 0; i <= stop_idx - num_cancelled; i++) begin
+                pos[i] <= pos[i + canc_tally[i]];
+            end
+            for(j = stop_idx - num_cancelled + 1; j <= stop_idx; j++) begin
+                pos[j] <= pos_queue[j - (stop_idx - num_cancelled + 1)];
             end
         end
-        else if(next_state == ADD_REMOVE) begin
+        else if(next_state == REMOVE) begin
+            // Handle removal first, at most can remove orders we sent to engine
+            for(m = 0; m <= num_orders_removed; m++) begin
+                if(m < num_holding) begin
+                    orders[m] = holding_buffer[m];
+                    holding_buffer[m] = 0;
+                    num_holding <= num_holding - 1;
+                end
+                else begin
+                    orders[m] = L2_orders[m - num_holding];
+                end
+            end
+            for(i = 0; i <= L1_capacity - num_orders_removed - 1; i++) begin
+                pos[i] = pos[i + num_orders_removed];
+            end
+            for(j = L1_capacity - num_orders_removed; j < L1_capacity; j++) begin
+                pos[j] = j - (L1_capacity - num_orders_removed);
+            end
+        end
+        else if(next_state == ADD) begin
+            // First handle incoming order
             local_tail_ptr = top_level_tail_ptr + num_orders_added; // Allow seperation for overflow orders
             top_ptr = 0;
-            // First handle incoming order
             for(i = 0; i < num_incoming_orders*2; i++) begin
                 if(new_orders[i][order_width-1 -: 3] == 3'b001) begin
                     if(new_orders[i][order_width-4]) begin  // Insert into top
                         if(top_ptr >= num_incoming_orders) begin // Can't insert into top_ptr, have to insert into evicted location
-                            evicted_orders[top_ptr - num_incoming_orders] <= orders[pos[insert_ptr]];
+                            holding_buffer[top_ptr - num_incoming_orders] <= orders[pos[insert_ptr]];
                             orders[pos[insert_ptr]] <= new_orders[i][order_width-5:0];
                             // Should only do this when full, extremely inefficient
                             if(L1_full) begin
@@ -177,7 +236,7 @@ module L1 #(
                     end
                     else begin // Push to tail
                         orders[local_tail_ptr] <= new_orders[i][order_width-5:0]; // Account for new orders
-                        evicted_orders[(local_tail_ptr - top_level_tail_ptr)] <= orders[pos[L1_capacity-1-(local_tail_ptr - top_level_tail_ptr)]];
+                        holding_buffer[(local_tail_ptr - top_level_tail_ptr)] <= orders[pos[L1_capacity-1-(local_tail_ptr - top_level_tail_ptr)]];
                         local_tail_ptr = local_tail_ptr + 1;
                     end
                 end
@@ -190,10 +249,20 @@ module L1 #(
                 insert_ptr <= pos[L1_capacity-1];
                 L1_full <= 1;
             end
-            // Handle removal, at most can remove orders we sent to engine
-            for(i= L1_capacity - num_orders_removed; i < L1_capacity;i++) begin
-                orders[pos[i]] <= L2_orders[i+num_cancelled]; // Account for L2 used to fill in cancelled
-                pos[i] = pos[i + num_orders_removed];
+            num_holding <= num_orders_added;
+        end
+     end
+     
+     // Send orders in holding buffer to L2 is not used
+     always_ff @(posedge clk or negedge rstn) begin
+        if(!rstn) begin
+            for(n = 0; n < num_incoming_orders; n++) begin
+                holding_buffer[n] <= 0;
+            end
+        end
+        for(n = 0; n < num_incoming_orders; n++) begin
+            if(holding_buffer[n] == 0) begin
+                evicted_orders[n] <= holding_buffer[n];
             end
         end
      end
