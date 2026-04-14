@@ -35,35 +35,40 @@ module L2 #(
     input logic clk,
     input logic rstn,
     input logic done_matching,
+    input logic CPU_orders_ready,
+    input logic [$clog2(num_incoming_orders)-1:0] num_L2_requested, // Will be for next cycle
+    input logic [$clog2(num_incoming_orders)-1:0] num_L1_evicted,   // Num orders to add from L1
+    input logic [$clog2(num_incoming_orders*2)-1:0] num_orders_added,   // Num orders to add from new
     input logic [$clog2(L1_capacity + L2_capacity)-1:0] top_level_tail_ptr,  // Last position within top price level
-    input logic [$clog2(num_incoming_orders*2)-1:0] num_orders_added,   // Num orders to add
-    input logic [$clog2(num_incoming_orders*2)-1:0] num_orders_removed, // Num orders to remove due to matching
     input logic [$clog2(num_incoming_orders)-1:0] num_cancelled,
-    input logic [$clog2(L1_capacity)-1:0] cancelled_orders [num_incoming_orders], // Cancelled order numbers
+    input logic [$clog2(L1_capacity+L2_capacity)-1:0] cancelled_orders [num_incoming_orders], // Cancelled order numbers
+    input logic [order_width-1:0] L1_orders [num_incoming_orders],
     input logic [order_width-1:0] new_orders [num_incoming_orders*2],  // Read incoming new orders(from matching & L1 overflow)
     input logic [order_width-1:0] CPU_orders [num_incoming_orders],
-    output logic [order_width-1:0] evicted_orders_L1 [num_incoming_orders],
+    output logic [order_width-1:0] orders_to_L1 [num_incoming_orders],
     output logic L2_orders_ready,
-    output logic [order_width-1:0] evicted_orders_CPU [num_incoming_orders]   // Evict orders to CPU
+    output logic [order_width-1:0] evicted_orders [num_incoming_orders],   // Evict orders to CPU
+    output logic [$clog2(num_incoming_orders)-1:0] num_CPU_requested, // Will be for next cycle
+    output logic [$clog2(num_incoming_orders)-1:0] num_L2_evicted
     );
     
     // Construct cache
     logic [order_width-5:0] orders [L2_capacity]; 
-    logic [$clog2(L1_capacity)-1:0] pos [L2_capacity];  // pos[i] = entry location of order i
-    logic [$clog2(L1_capacity)-1:0] pos_queue [L2_capacity];
+    logic [$clog2(L2_capacity)-1:0] pos [L2_capacity];  // pos[i] = entry location of order i
+    logic [$clog2(L2_capacity)-1:0] pos_queue [L2_capacity];
+    logic [$clog2(num_incoming_orders)-1:0] canc_tally [L2_capacity];
     
     // State transition
     typedef enum logic [2:0] {
-        RST,
-        L1_CANCEL,
-        L2_CANCEL,     
-        ADD_REMOVE,
-        IDLE
+        IDLE,
+        SEND_L1, 
+        CANCEL,   
+        ADD 
     } state_t;
     state_t state, next_state;
     always_ff @(posedge clk or negedge rstn) begin
         if(!rstn) begin
-            state <= RST;
+            state <= IDLE;
         end
         else begin
             state <= next_state;
@@ -72,116 +77,177 @@ module L2 #(
     
     // Compute next stage
     always_comb begin
-        if(state == RST) begin
-            if(!rstn) begin
-                next_state = RST;
+        if(state == IDLE) begin
+            if(num_L2_requested > 0) begin
+                next_state = SEND_L1;  // Occurs if L1 orders filled or cancelled, highest priority
             end
-            else begin
-                next_state = L1_CANCEL;
+            else if(num_cancelled > 0) begin
+                next_state = CANCEL;
             end
-        end
-        else if(state == L1_CANCEL) begin
-            next_state = L2_CANCEL;   
-        end
-        else if(state == L2_CANCEL) begin
-            if(done_matching) begin
-                next_state = ADD_REMOVE; 
-            end
-            else begin
-                next_state = IDLE; // Can't rematch unless cancels are done first
-            end
-        end
-        else if(state == ADD_REMOVE) begin
-            next_state = L1_CANCEL;
-        end
-        else if(state == IDLE) begin
-            if(done_matching) begin
-                next_state = ADD_REMOVE;
+            else if(done_matching || (num_L1_evicted > 0)) begin
+                next_state = ADD;
             end
             else begin
                 next_state = IDLE;
             end
         end
+        else if(state == SEND_L1) begin
+            if(num_L2_requested > 0) begin
+                next_state = SEND_L1;
+            end
+            else if(num_cancelled > 0) begin
+                next_state = CANCEL;
+            end
+            else if(done_matching || (num_L1_evicted > 0)) begin
+                next_state = ADD;
+            end
+            else begin
+                next_state = IDLE;
+            end
+        end
+        else if(state == CANCEL) begin
+            if(done_matching || (num_L1_evicted > 0)) begin
+                next_state = ADD;
+            end
+            else if(num_L2_requested > 0) begin
+                next_state = SEND_L1;
+            end
+            else if(num_cancelled > 0) begin
+                next_state = CANCEL;
+            end
+            else begin
+                next_state = IDLE;
+            end
+        end
+        else if(state == ADD) begin
+            if(done_matching && num_L2_requested > 0) begin
+                next_state = SEND_L1;
+            end
+            else if(CPU_orders_ready && (num_cancelled > 0)) begin
+                next_state = CANCEL; 
+            end
+            else if(done_matching) begin
+                next_state = ADD;
+            end
+            else begin
+                next_state = IDLE; // Can't rematch unless cancels are done first
+            end
+        end
     end
     
-    integer i,j,k;
-    integer can_count, top_ptr, local_tail_ptr;
-    integer L1_count;
+    integer i,j,k,m,n;
+    logic [$clog2(L1_capacity)-1:0] top_ptr, insert_ptr, temp_ptr, stop_idx, canc_count;
+    logic [$clog2(L1_capacity+L2_capacity)-1:0] local_tail_ptr;
+    logic L2_full, test;
+    
+    // Send top of OB to matching engine
     always_ff @(posedge clk or negedge rstn) begin
-        if(state == RST) begin
+        if(!rstn) begin
             for(i = 0; i < L2_capacity; i = i + 1) begin
                 orders[i] <= 0;
                 pos[i] <= i;
+                pos_queue[i] <= 0;
+                canc_tally[i] <= 0;
+                evicted_orders[i] <= 0;
             end
+            top_ptr <= 0;
+            local_tail_ptr <= num_incoming_orders;
+            i <= 0;
+            j <= 0;
+            m <= 0;
+            test <= 0;
+            insert_ptr <= num_incoming_orders;
+            L2_full <= 0;
+            canc_count <= 0;
+            num_L2_evicted <= 0;
+            num_CPU_requested <= 0;
         end
-        else if(state == L1_CANCEL) begin
-            // Perform L1 cancels first, L1 requires highest priority
-            L1_count = 0;
-            for(j = 0; j < num_cancelled; j++) begin
-                if(cancelled_orders[j] < L1_capacity) begin
-                    // Send top up & move in data from CPU
-                    evicted_orders_L1[L1_count] <= orders[pos[L1_count]];  
-                    orders[pos[L1_count]] <= CPU_orders[L1_count];  
-                    L1_count = L1_count + 1;                                           
+        else if(next_state == SEND_L1) begin
+            num_CPU_requested <= num_L2_requested;
+            num_L2_evicted <= 0;
+            for(m = 0; m < num_L2_requested; m++) begin
+                orders_to_L1[m] <= orders[pos[m]];
+                orders[pos[m]] <= CPU_orders[m];
+            end
+            for(i = 0; i <= L2_capacity - num_L2_requested - 1; i++) begin
+                pos[i] = pos[i + num_L2_requested];
+            end
+            for(j = L2_capacity - num_L2_requested; j < L2_capacity; j++) begin
+                pos[j] = j - (L2_capacity - num_L2_requested);
+            end
+            num_L2_evicted <= 0;
+        end
+        else if(next_state == CANCEL) begin
+            // Must perform cancellations first, independent of filling of orders
+            // Produce neccessary meta info
+            num_L2_evicted <= 0;
+            num_CPU_requested <= num_cancelled;
+            canc_count = 0;
+            for(i = 0; i < L2_capacity; i = i + 1) begin
+                if((i == cancelled_orders[canc_count]) || ((i+canc_count) == cancelled_orders[canc_count])) begin
+                    canc_count = canc_count + 1;
                 end
+                canc_tally[i] = canc_count;
             end
-            // Update positions
-            for(i = 0; i < L2_capacity - L1_count; i++) begin
-                pos[i] <= pos[i + L1_count]; // Shift up
-            end
-            for(i = L2_capacity - L1_count; i < L2_capacity; i++) begin
-                pos[i] <= pos[i - (L2_capacity - L1_count)]; // Wrap around
-            end
-            L2_orders_ready <= 1; // Signal to L1
-        end
-        else if(state == L2_CANCEL) begin
-            // Only begin once positions are updated for L1
-            // Perform cancel of L2 orders
+            // Insert new orders
             for(j = 0; j < num_cancelled; j++) begin
                 orders[pos[cancelled_orders[j]]] <= CPU_orders[j];
+                pos_queue[j] = pos[cancelled_orders[j]];
             end
-            can_count = 0;
             // Update positions
-            for(j = L2_capacity - 1; j >= 0; j--) begin
-                if(j >= L1_capacity - num_cancelled) begin
-                    pos_queue[can_count] = pos[j-can_count];
-                    pos[j] = pos[cancelled_orders[num_cancelled-(can_count+1)]]; // Push cancelled to back of queue
-                    can_count = can_count + 1;
-                end
-                else if(can_count > 0) begin
-                    pos[j] = pos_queue[num_cancelled-can_count];
-                    can_count = can_count -1;
-                end
+            if(L2_full) begin
+                stop_idx = L2_capacity - 1;
+            end
+            else begin
+                stop_idx = local_tail_ptr;
+            end
+            for(i = 0; i <= stop_idx - num_cancelled; i++) begin
+                pos[i] <= pos[i + canc_tally[i]];
+            end
+            for(j = stop_idx - num_cancelled + 1; j <= stop_idx; j++) begin
+                pos[j] <= pos_queue[j - (stop_idx - num_cancelled + 1)];
             end
         end
-        else if(state == ADD_REMOVE) begin
-            top_ptr = 0;
-            local_tail_ptr = top_level_tail_ptr + num_orders_added;
+        else if(next_state == ADD) begin
             // First handle incoming order
+            if(L2_full) begin
+                num_L2_evicted <= num_orders_added;
+            end
+            else begin
+                num_L2_evicted <= 0;
+            end
+            num_CPU_requested <= 0;
+            local_tail_ptr = top_level_tail_ptr + num_orders_added; // Allow seperation for overflow orders
+            top_ptr = 0;
             for(i = 0; i < num_incoming_orders*2; i++) begin
                 if(new_orders[i][order_width-1 -: 3] == 3'b010) begin
-                    if(new_orders[i][order_width-4]) begin  // Insert into top
-                        if(top_ptr >= num_incoming_orders) begin // Can't insert into top_ptr, have to insert into evicted location
-                            evicted_orders_CPU[top_ptr - num_incoming_orders] <= orders[pos[L2_capacity-1-(top_ptr-num_incoming_orders)]];
-                            orders[pos[L2_capacity-1-(top_ptr-num_incoming_orders)]] <= new_orders[i][order_width-5:0];
+                    if(new_orders[i][order_width-4]) begin  // Insert into top, must be from L
+                        evicted_orders[top_ptr] <= orders[pos[insert_ptr]];
+                        orders[pos[insert_ptr]] <= new_orders[i][order_width-5:0];
+                        // Should only do this when full, extremely inefficient
+                        if(L2_full) begin
+                            temp_ptr = pos[L1_capacity-1];
+                            for(j = L2_capacity; j >= num_incoming_orders; j--) begin
+                                pos[j] = pos[j-1];
+                            end
+                            pos[num_incoming_orders] = temp_ptr;
                         end
-                        else begin // Else can just replace previous
-                            orders[pos[top_ptr]] <= new_orders[i][order_width-5:0]; // Disregard header info
-                        end
+                        top_ptr = top_ptr + 1;
                     end
-                    else begin
+                    else begin // Push to tail
                         orders[local_tail_ptr] <= new_orders[i][order_width-5:0]; // Account for new orders
-                        evicted_orders_CPU[(local_tail_ptr - top_level_tail_ptr)] <= orders[pos[L2_capacity-1-(local_tail_ptr - top_level_tail_ptr)]];
+                        evicted_orders[(local_tail_ptr - top_level_tail_ptr)] <= orders[pos[L2_capacity-1-(local_tail_ptr - top_level_tail_ptr)]];
                         local_tail_ptr = local_tail_ptr + 1;
                     end
-                    top_ptr = top_ptr + 1;
                 end
             end
-            
-            // Handle removal, at most can remove orders we sent to engine
-            for(i = L2_capacity - num_orders_removed; i < L2_capacity;i++) begin
-                orders[pos[i]] <= CPU_orders[i+num_cancelled]; // Account for L2 used to fill in cancelled
-                pos[i] = pos[i + num_orders_removed];
+            if(local_tail_ptr < L2_capacity-1) begin
+                insert_ptr <= local_tail_ptr;
+                L2_full <= 0;
+            end
+            else begin
+                insert_ptr <= pos[L2_capacity-1];
+                L2_full <= 1;
             end
         end
      end
