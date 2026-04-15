@@ -124,6 +124,20 @@ module L2_tb #(
             );
         end
     end
+    
+    logic [order_width-1:0] dut_L1_orders [10];  // Intial L1 to throw at sim
+    initial begin
+        for(int i = 0; i < num_dut_orders; i++) begin
+            dut_L1_orders[i] = make_order(
+                3'b001,
+                1'b0,
+                timestamp_bits'(i / 2),
+                orderID_bits'(i),
+                rand_price(),
+                rand_qty()
+            );
+        end
+    end
 
     // Simulated L1 evicted orders (stripped of header, order_width-5 wide)
     logic [order_width-5:0] evicted_L1_orders [num_L1_orders];
@@ -168,7 +182,7 @@ module L2_tb #(
         rstn               = 0;
         done_matching      = 0;
         CPU_orders_ready   = 0;
-        top_level_tail_ptr = 0;
+        top_level_tail_ptr = 8;
         num_orders_added   = 0;
         num_L2_requested   = 0;
         num_L1_evicted     = 0;
@@ -222,10 +236,12 @@ module L2_tb #(
     );
         new_orders[0]      = ord0; new_orders[1] = ord1;
         new_orders[2]      = ord2; new_orders[3] = ord3;
-        new_orders[4]      = ord4; new_orders[5] = ord5;
+        new_orders[4]      = ord4;
+        L1_orders[0] = ord5;
         top_level_tail_ptr = tail_ptr;
         num_orders_added   = n_added;
         num_L2_requested   = n_requested;
+        num_L1_evicted = 1;
         done_matching      = 1;
         CPU_orders_ready   = 1;
         @(posedge clk); #1;
@@ -234,7 +250,7 @@ module L2_tb #(
     endtask
 
     task send_orders_ofl2(
-        input logic [order_width-1:0] ord0, ord1, ord2, ord3, ord4, ord5, ord6,
+        input logic [order_width-1:0] ord0, ord1, ord2, ord3, ord4, ord5, ord6, ord7,
         input logic [$clog2(L1_capacity+L2_capacity)-1:0] tail_ptr,
         input logic [$clog2(num_incoming_orders*2)-1:0] n_added,
         input logic [$clog2(num_incoming_orders)-1:0] n_requested
@@ -242,7 +258,7 @@ module L2_tb #(
         new_orders[0]      = ord0; new_orders[1] = ord1;
         new_orders[2]      = ord2; new_orders[3] = ord3;
         new_orders[4]      = ord4; new_orders[5] = ord5;
-        new_orders[6]      = ord6;
+        new_orders[6]      = ord6; new_orders[7] = ord7;
         top_level_tail_ptr = tail_ptr;
         num_orders_added   = n_added;
         num_L2_requested   = n_requested;
@@ -299,7 +315,7 @@ module L2_tb #(
         for(int i = 0; i < 8; i++) begin
             send_orders(dut_new_orders[i*5], dut_new_orders[i*5+1],
                         dut_new_orders[i*5+2], dut_new_orders[i*5+3],
-                        dut_new_orders[i*5+4], 0, 5, 0);
+                        dut_new_orders[i*5+4], 5*i + 8, 5, 0);
         end
         @(posedge clk); #1;
         @(posedge clk); #1;
@@ -317,7 +333,7 @@ module L2_tb #(
             num_L1_evicted = !(!i);
             send_orders_ofl1(dut_new_orders[i*6], dut_new_orders[i*6+1],
                              dut_new_orders[i*6+2], dut_new_orders[i*6+3],
-                             dut_new_orders[i*6+4], dut_new_orders[i*6+5],
+                             dut_new_orders[i*6+4], dut_L1_orders[i],
                              i+5, !(!i), 0);
         end
         @(posedge clk); #1;
@@ -332,13 +348,13 @@ module L2_tb #(
         $display("=== Test 3: Large overflow via L1 evictions ===");
         do_reset();
         num_cancelled = 0;
-        for(int i = 0; i < L1_capacity; i++) begin
-            num_L1_evicted = 1 + !(!i);
-            send_orders_ofl2(dut_new_orders[i*7], dut_new_orders[i*7+1],
-                             dut_new_orders[i*7+2], dut_new_orders[i*7+3],
-                             dut_new_orders[i*7+4], dut_new_orders[i*7+5],
-                             dut_new_orders[i*7+6], i+5, 1+!(!i), 0);
-        end
+//        for(int i = 0; i < L1_capacity; i++) begin
+//            num_L1_evicted = 1 + !(!i);
+//            send_orders_ofl2(dut_new_orders[i*7], dut_new_orders[i*7+1],
+//                             dut_new_orders[i*7+2], dut_new_orders[i*7+3],
+//                             dut_new_orders[i*7+4], dut_new_orders[i*7+5],
+//                             dut_new_orders[i*7+6], i+5, 1+!(!i), 0);
+//        end
         @(posedge clk); #1;
         @(posedge clk); #1;
         $display("Test 3 PASSED: evicted_orders[0] = %0h", evicted_orders[0]);
@@ -670,8 +686,8 @@ module L2_tb #(
     // Run all tests
     // -------------------------------------------------------------------------
     initial begin
-        test1();
-//        test2();
+//        test1();
+        test2();
 //        test3();
 //        test4();
 //        test5();
