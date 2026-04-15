@@ -61,7 +61,7 @@ module L2 #(
     // State transition
     typedef enum logic [2:0] {
         IDLE,
-        SEND_L1, 
+        SERVICE_L1, 
         CANCEL,   
         ADD 
     } state_t;
@@ -79,7 +79,7 @@ module L2 #(
     always_comb begin
         if(state == IDLE) begin
             if(num_L2_requested > 0) begin
-                next_state = SEND_L1;  // Occurs if L1 orders filled or cancelled, highest priority
+                next_state = SERVICE_L1;  // Occurs if L1 orders filled or cancelled, highest priority
             end
             else if(num_cancelled > 0) begin
                 next_state = CANCEL;
@@ -91,9 +91,9 @@ module L2 #(
                 next_state = IDLE;
             end
         end
-        else if(state == SEND_L1) begin
+        else if(state == SERVICE_L1) begin
             if(num_L2_requested > 0) begin
-                next_state = SEND_L1;
+                next_state = SERVICE_L1;
             end
             else if(num_cancelled > 0) begin
                 next_state = CANCEL;
@@ -110,7 +110,7 @@ module L2 #(
                 next_state = ADD;
             end
             else if(num_L2_requested > 0) begin
-                next_state = SEND_L1;
+                next_state = SERVICE_L1;
             end
             else if(num_cancelled > 0) begin
                 next_state = CANCEL;
@@ -120,8 +120,8 @@ module L2 #(
             end
         end
         else if(state == ADD) begin
-            if(done_matching && num_L2_requested > 0) begin
-                next_state = SEND_L1;
+            if(num_L2_requested > 0) begin
+                next_state = SERVICE_L1;
             end
             else if(CPU_orders_ready && (num_cancelled > 0)) begin
                 next_state = CANCEL; 
@@ -151,20 +151,20 @@ module L2 #(
                 evicted_orders[i] <= 0;
             end
             top_ptr <= 0;
-            local_tail_ptr <= num_incoming_orders;
+            local_tail_ptr <= 0;
             i <= 0;
             j <= 0;
             m <= 0;
             test <= 0;
-            insert_ptr <= num_incoming_orders;
+            insert_ptr <= 0;
             L2_full <= 0;
             canc_count <= 0;
             num_L2_evicted <= 0;
             num_CPU_requested <= 0;
         end
-        else if(next_state == SEND_L1) begin
+        else if(next_state == SERVICE_L1) begin
             num_CPU_requested <= num_L2_requested;
-            num_L2_evicted <= 0;
+            num_L2_evicted <= num_L1_evicted;
             for(m = 0; m < num_L2_requested; m++) begin
                 orders_to_L1[m] <= orders[pos[m]];
                 orders[pos[m]] <= CPU_orders[m];
@@ -175,7 +175,7 @@ module L2 #(
             for(j = L2_capacity - num_L2_requested; j < L2_capacity; j++) begin
                 pos[j] = j - (L2_capacity - num_L2_requested);
             end
-            num_L2_evicted <= 0;
+
         end
         else if(next_state == CANCEL) begin
             // Must perform cancellations first, independent of filling of orders
@@ -211,34 +211,41 @@ module L2 #(
         else if(next_state == ADD) begin
             // First handle incoming order
             if(L2_full) begin
-                num_L2_evicted <= num_orders_added;
+                num_L2_evicted <= num_orders_added + num_L1_evicted;
             end
             else begin
                 num_L2_evicted <= 0;
             end
+            if(top_level_tail_ptr < L1_capacity) begin
+                local_tail_ptr = num_L1_evicted;
+            end 
+            else begin
+                local_tail_ptr = top_level_tail_ptr - L1_capacity + num_L1_evicted;
+            end
+            
+            // Insert L1 orders first
             num_CPU_requested <= 0;
-            local_tail_ptr = top_level_tail_ptr + num_orders_added; // Allow seperation for overflow orders
             top_ptr = 0;
+            for(j = 0; j < num_L1_evicted;j++) begin 
+                evicted_orders[top_ptr] <= orders[pos[insert_ptr]];
+                orders[pos[insert_ptr]] <= L1_orders[j];
+                // Should only do this when full, extremely inefficient
+                if(L2_full) begin
+                    temp_ptr = pos[L1_capacity-1];
+                    for(j = L2_capacity; j >= num_incoming_orders; j--) begin
+                        pos[j] = pos[j-1];
+                    end
+                    pos[num_incoming_orders] = temp_ptr;
+                end
+                top_ptr = top_ptr + 1;
+            end
+ 
+            // Check incoming for L2
             for(i = 0; i < num_incoming_orders*2; i++) begin
                 if(new_orders[i][order_width-1 -: 3] == 3'b010) begin
-                    if(new_orders[i][order_width-4]) begin  // Insert into top, must be from L
-                        evicted_orders[top_ptr] <= orders[pos[insert_ptr]];
-                        orders[pos[insert_ptr]] <= new_orders[i][order_width-5:0];
-                        // Should only do this when full, extremely inefficient
-                        if(L2_full) begin
-                            temp_ptr = pos[L1_capacity-1];
-                            for(j = L2_capacity; j >= num_incoming_orders; j--) begin
-                                pos[j] = pos[j-1];
-                            end
-                            pos[num_incoming_orders] = temp_ptr;
-                        end
-                        top_ptr = top_ptr + 1;
-                    end
-                    else begin // Push to tail
-                        orders[local_tail_ptr] <= new_orders[i][order_width-5:0]; // Account for new orders
-                        evicted_orders[(local_tail_ptr - top_level_tail_ptr)] <= orders[pos[L2_capacity-1-(local_tail_ptr - top_level_tail_ptr)]];
-                        local_tail_ptr = local_tail_ptr + 1;
-                    end
+                    orders[local_tail_ptr] <= new_orders[i][order_width-5:0];
+                    evicted_orders[(local_tail_ptr - top_level_tail_ptr)] <= orders[pos[L2_capacity-1-(local_tail_ptr - top_level_tail_ptr)]];
+                    local_tail_ptr = local_tail_ptr + 1;
                 end
             end
             if(local_tail_ptr < L2_capacity-1) begin
