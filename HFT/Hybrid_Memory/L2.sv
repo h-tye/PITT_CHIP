@@ -136,7 +136,7 @@ module L2 #(
     end
     
     integer i,j,k,m,n;
-    logic [$clog2(L1_capacity)-1:0] top_ptr, insert_ptr, temp_ptr, stop_idx, canc_count;
+    logic [$clog2(L2_capacity)-1:0] top_ptr, insert_ptr, temp_ptr, stop_idx, canc_count;
     logic [$clog2(L1_capacity+L2_capacity)-1:0] local_tail_ptr;
     logic L2_full, test;
     
@@ -236,6 +236,13 @@ module L2 #(
                         pos[j] = pos[j-1];
                     end
                     pos[num_incoming_orders] = temp_ptr;
+                end
+                else begin
+                    temp_ptr = pos[0];
+                    for(j = 0; j < local_tail_ptr; j++) begin
+                        pos[j] = pos[j] + 1;
+                    end
+                    pos[0] = insert_ptr + top_ptr;
                 end
                 top_ptr = top_ptr + 1;
             end
