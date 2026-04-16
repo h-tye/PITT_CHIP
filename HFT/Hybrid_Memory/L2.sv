@@ -136,7 +136,7 @@ module L2 #(
     end
     
     integer i,j,k,m,n;
-    logic [$clog2(L2_capacity)-1:0] top_ptr, insert_ptr, temp_ptr, stop_idx, canc_count;
+    logic [$clog2(L2_capacity)-1:0] top_ptr, temp_ptr, stop_idx, canc_count, insert_ptr;
     logic [$clog2(L1_capacity+L2_capacity)-1:0] local_tail_ptr;
     logic L2_full, test;
     
@@ -227,32 +227,32 @@ module L2 #(
             num_CPU_requested <= 0;
             top_ptr = 0;
             for(j = 0; j < num_L1_evicted;j++) begin 
-                evicted_orders[top_ptr] <= orders[pos[insert_ptr]];
-                orders[pos[insert_ptr]] <= L1_orders[j];
+                evicted_orders[j] <= orders[pos[insert_ptr + j]];
+                orders[pos[insert_ptr + j]] <= L1_orders[j];
                 // Should only do this when full, extremely inefficient
-                if(L2_full) begin
-                    temp_ptr = pos[L1_capacity-1];
-                    for(j = L2_capacity; j >= num_incoming_orders; j--) begin
-                        pos[j] = pos[j-1];
-                    end
-                    pos[num_incoming_orders] = temp_ptr;
-                end
-                else begin
-                    temp_ptr = pos[0];
-                    for(j = 0; j < local_tail_ptr; j++) begin
-                        pos[j] = pos[j] + 1;
-                    end
-                    pos[0] = insert_ptr + top_ptr;
-                end
-                top_ptr = top_ptr + 1;
             end
- 
             // Check incoming for L2
             for(i = 0; i < num_incoming_orders*2; i++) begin
                 if(new_orders[i][order_width-1 -: 3] == 3'b010) begin
                     orders[local_tail_ptr] <= new_orders[i][order_width-5:0];
                     evicted_orders[(local_tail_ptr - top_level_tail_ptr)] <= orders[pos[L2_capacity-1-(local_tail_ptr - top_level_tail_ptr)]];
                     local_tail_ptr = local_tail_ptr + 1;
+                end
+            end
+            
+            if(L2_full) begin
+                temp_ptr = pos[L1_capacity-1];
+                for(m = L2_capacity; m >= num_incoming_orders; m--) begin
+                    pos[m] = pos[m-1];
+                end
+                pos[num_incoming_orders] = temp_ptr;
+            end
+            else begin
+                for(m = num_L1_evicted; m < insert_ptr + num_L1_evicted; m++) begin
+                    pos[m] <= pos[m-num_L1_evicted];
+                end
+                for(m = 0; m < num_L1_evicted; m++) begin
+                    pos[m] <= insert_ptr + m;
                 end
             end
             if(local_tail_ptr < L2_capacity-1) begin
