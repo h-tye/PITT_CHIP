@@ -229,10 +229,10 @@ module L2 #(
             if(L2_full) begin
                 for(j = 0; j < num_L1_evicted;j++) begin 
                     evicted_orders[j] <= orders[insert_ptr + j];
-                    orders[insert_ptr + j] <= L1_orders[j];
+                    orders[insert_ptr + j] <= L1_orders[num_L1_evicted - j - 1];
                 end  
                 for(m = L2_capacity - num_L1_evicted; m < L2_capacity; m++) begin
-                    pos[L2_capacity - num_L1_evicted - m] <= pos[m];
+                    pos[m - (L2_capacity - num_L1_evicted)] <= pos[m];
                 end
                 for(m = num_L1_evicted; m < L2_capacity; m++) begin
                     pos[m] <= pos[m - num_L1_evicted];
