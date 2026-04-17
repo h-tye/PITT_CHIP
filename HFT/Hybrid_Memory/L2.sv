@@ -137,7 +137,7 @@ module L2 #(
     
     integer i,j,k,m,n;
     logic [$clog2(L2_capacity)-1:0] top_ptr, temp_ptr, stop_idx, canc_count, insert_ptr;
-    logic [$clog2(L1_capacity+L2_capacity)-1:0] local_tail_ptr;
+    logic [9:0] local_tail_ptr;
     logic L2_full, test;
     
     // Send top of OB to matching engine
@@ -231,8 +231,8 @@ module L2 #(
             // If L2 full, can no longer push to tail, only to front
             if(L2_full) begin
                 for(j = 0; j < num_L1_evicted;j++) begin 
-                    evicted_orders[j] <= orders[insert_ptr + j];
-                    orders[insert_ptr + j] <= L1_orders[num_L1_evicted - j - 1];
+                    evicted_orders[j] <= orders[insert_ptr - num_L1_evicted + j + 1];
+                    orders[insert_ptr - num_L1_evicted + j + 1] <= L1_orders[j];
                 end  
                 for(m = L2_capacity - num_L1_evicted; m < L2_capacity; m++) begin
                     pos[m - (L2_capacity - num_L1_evicted)] <= pos[m];
