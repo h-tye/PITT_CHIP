@@ -39,7 +39,7 @@ module L2 #(
     input logic [$clog2(num_incoming_orders)-1:0] num_L2_requested, // Will be for next cycle
     input logic [$clog2(num_incoming_orders)-1:0] num_L1_evicted,   // Num orders to add from L1
     input logic [$clog2(num_incoming_orders*2)-1:0] num_orders_added,   // Num orders to add from new
-    input logic [$clog2(L1_capacity + L2_capacity)-1:0] top_level_tail_ptr,  // Last position within top price level
+    input logic [9:0] top_level_tail_ptr,  // Last position within top price level
     input logic [$clog2(num_incoming_orders)-1:0] num_cancelled,
     input logic [$clog2(L1_capacity+L2_capacity)-1:0] cancelled_orders [num_incoming_orders], // Cancelled order numbers
     input logic [order_width-1:0] L1_orders [num_incoming_orders],
@@ -224,30 +224,32 @@ module L2 #(
             end
             
             // Insert L1 orders first
-            num_CPU_requested <= 0;
-            top_ptr = 0;
-            for(j = 0; j < num_L1_evicted;j++) begin 
-                evicted_orders[j] <= orders[pos[insert_ptr + j]];
-                orders[pos[insert_ptr + j]] <= L1_orders[j];
-                // Should only do this when full, extremely inefficient
-            end
-            // Check incoming for L2
-            for(i = 0; i < num_incoming_orders*2; i++) begin
-                if(new_orders[i][order_width-1 -: 3] == 3'b010) begin
-                    orders[local_tail_ptr] <= new_orders[i][order_width-5:0];
-                    evicted_orders[(local_tail_ptr - top_level_tail_ptr)] <= orders[pos[L2_capacity-1-(local_tail_ptr - top_level_tail_ptr)]];
-                    local_tail_ptr = local_tail_ptr + 1;
-                end
-            end
-            
+            num_CPU_requested <= 0; 
+            // If L2 full, can no longer push to tail, only to front
             if(L2_full) begin
-                temp_ptr = pos[L1_capacity-1];
-                for(m = L2_capacity; m >= num_incoming_orders; m--) begin
-                    pos[m] = pos[m-1];
+                for(j = 0; j < num_L1_evicted;j++) begin 
+                    evicted_orders[j] <= orders[insert_ptr + j];
+                    orders[insert_ptr + j] <= L1_orders[j];
+                end  
+                for(m = L2_capacity - num_L1_evicted; m < L2_capacity; m++) begin
+                    pos[L2_capacity - num_L1_evicted - m] <= pos[m];
                 end
-                pos[num_incoming_orders] = temp_ptr;
+                for(m = num_L1_evicted; m < L2_capacity; m++) begin
+                    pos[m] <= pos[m - num_L1_evicted];
+                end
             end
             else begin
+                for(j = 0; j < num_L1_evicted;j++) begin
+                    orders[insert_ptr + j] <= L1_orders[j];
+                end  
+                // Can check incoming for L2
+                for(i = 0; i < num_incoming_orders*2; i++) begin
+                    if(new_orders[i][order_width-1 -: 3] == 3'b010) begin
+                        orders[local_tail_ptr] <= new_orders[i][order_width-5:0];
+                        evicted_orders[(local_tail_ptr - top_level_tail_ptr)] <= orders[pos[L2_capacity-1-(local_tail_ptr - top_level_tail_ptr)]];
+                        local_tail_ptr = local_tail_ptr + 1;
+                    end
+                end
                 for(m = num_L1_evicted; m < insert_ptr + num_L1_evicted; m++) begin
                     pos[m] <= pos[m-num_L1_evicted];
                 end
@@ -255,8 +257,9 @@ module L2 #(
                     pos[m] <= insert_ptr + m;
                 end
             end
+            
             if(local_tail_ptr < L2_capacity-1) begin
-                insert_ptr <= local_tail_ptr;
+                insert_ptr <= pos[local_tail_ptr];
                 L2_full <= 0;
             end
             else begin
