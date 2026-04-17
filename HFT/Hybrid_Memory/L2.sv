@@ -150,6 +150,9 @@ module L2 #(
                 canc_tally[i] <= 0;
                 evicted_orders[i] <= 0;
             end
+            for(j = 0; j < num_incoming_orders; j = j + 1) begin
+                orders_to_L1[j] <= 0;
+            end
             top_ptr <= 0;
             local_tail_ptr <= 0;
             i <= 0;
@@ -170,10 +173,10 @@ module L2 #(
                 orders[pos[m]] <= CPU_orders[m];
             end
             for(i = 0; i <= L2_capacity - num_L2_requested - 1; i++) begin
-                pos[i] = pos[i + num_L2_requested];
+                pos[i] <= pos[i + num_L2_requested];
             end
             for(j = L2_capacity - num_L2_requested; j < L2_capacity; j++) begin
-                pos[j] = j - (L2_capacity - num_L2_requested);
+                pos[j] <= pos[j - (L2_capacity - num_L2_requested)];
             end
 
         end
