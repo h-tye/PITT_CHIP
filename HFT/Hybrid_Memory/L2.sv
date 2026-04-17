@@ -186,6 +186,9 @@ module L2 #(
             for(i = 0; i < L2_capacity; i = i + 1) begin
                 if((i == cancelled_orders[canc_count]) || ((i+canc_count) == cancelled_orders[canc_count])) begin
                     canc_count = canc_count + 1;
+                    if(((i+canc_count) == cancelled_orders[canc_count])) begin
+                        canc_count = canc_count + 1;
+                    end
                 end
                 canc_tally[i] = canc_count;
             end
