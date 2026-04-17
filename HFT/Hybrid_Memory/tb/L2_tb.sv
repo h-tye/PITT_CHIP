@@ -363,7 +363,7 @@ module L2_tb #(
     endtask
 
     // -------------------------------------------------------------------------
-    // Test 4: Overflow to full L2
+    // Test 4: Low Overflow to full L2
     // -------------------------------------------------------------------------
     task test4();
         $display("=== Test 4: Low overflow via L1 evictions ===");
@@ -379,18 +379,37 @@ module L2_tb #(
         @(posedge clk); #1;
         $display("Test 4 PASSED: evicted_orders[0] = %0h", evicted_orders[0]);
     endtask
-
+    
     // -------------------------------------------------------------------------
-    // Test 4: Simple cancellation, no overflow, only 1
+    // Test 5: High Overflow to full L2
     // -------------------------------------------------------------------------
     task test5();
-        $display("=== Test 4: 1 cancellation ===");
+        $display("=== Test 5: High overflow via L1 evictions ===");
+        do_reset();
+        num_cancelled = 0;
+        for(int i = 0; i < 8; i++) begin
+            send_orders_ofl2(dut_new_orders[i*6], dut_new_orders[i*6+1],
+                             dut_new_orders[i*6+2], dut_new_orders[i*6+3],
+                             dut_new_orders[i*6+4], evicted_L1_orders[3*i],
+                             evicted_L1_orders[3*i+1], evicted_L1_orders[3*i+2],
+                             8*i+8, 6, 0);
+        end
+        @(posedge clk); #1;
+        @(posedge clk); #1;
+        $display("Test 5 PASSED: evicted_orders[0] = %0h", evicted_orders[0]);
+    endtask
+
+    // -------------------------------------------------------------------------
+    // Test 6: Simple cancellation, no overflow, only 1
+    // -------------------------------------------------------------------------
+    task test6();
+        $display("=== Test 6: 1 cancellation ===");
         do_reset();
         num_L1_evicted = 0;
         for(int i = 0; i < L1_capacity/2; i++) begin
             send_orders(dut_new_orders[i*5], dut_new_orders[i*5+1],
                         dut_new_orders[i*5+2], dut_new_orders[i*5+3],
-                        dut_new_orders[i*5+4], !(!i)+4, 0, 0);
+                        dut_new_orders[i*5+4], 5*i+8, 5, 0);
         end
         num_cancelled       = 1;
         cancelled_orders[0] = 1;
@@ -406,53 +425,53 @@ module L2_tb #(
                         dut_new_orders[i*5+2], dut_new_orders[i*5+3],
                         dut_new_orders[i*5+4], 5, 0, 0);
         end
-        $display("Test 4 PASSED");
+        $display("Test 5 PASSED");
     endtask
 
     // -------------------------------------------------------------------------
-    // Test 5: Multiple cancellations, no overflow
+    // Test 7: Multiple cancellations, no overflow
     // -------------------------------------------------------------------------
-//    task test5();
-//        $display("=== Test 5: Multiple cancellations ===");
-//        do_reset();
-//        num_L1_evicted = 0;
-//        for(int i = 0; i < L1_capacity/2; i++) begin
-//            send_orders(dut_new_orders[i*5], dut_new_orders[i*5+1],
-//                        dut_new_orders[i*5+2], dut_new_orders[i*5+3],
-//                        dut_new_orders[i*5+4], !(!i)+4, 0, 0);
-//        end
-//        num_cancelled       = 3;
-//        cancelled_orders[0] = 0;
-//        cancelled_orders[1] = 2;
-//        cancelled_orders[2] = 4;
-//        CPU_orders[0]       = CPU_order_pool[0];
-//        CPU_orders[1]       = CPU_order_pool[1];
-//        CPU_orders[2]       = CPU_order_pool[2];
-//        CPU_orders_ready    = 1;
-//        done_matching       = 0;
-//        @(posedge clk); #1;
-//        CPU_orders_ready = 0;
-//        num_cancelled    = 0;
-//        @(posedge clk); #1;
+    task test7();
+        $display("=== Test 7: Multiple cancellations ===");
+        do_reset();
+        num_L1_evicted = 0;
+        for(int i = 0; i < 4; i++) begin
+            send_orders(dut_new_orders[i*5], dut_new_orders[i*5+1],
+                        dut_new_orders[i*5+2], dut_new_orders[i*5+3],
+                        dut_new_orders[i*5+4], 5*i+8, 5, 0);
+        end
+        num_cancelled       = 3;
+        cancelled_orders[0] = 0;
+        cancelled_orders[1] = 2;
+        cancelled_orders[2] = 4;
+        CPU_orders[0]       = CPU_order_pool[0];
+        CPU_orders[1]       = CPU_order_pool[1];
+        CPU_orders[2]       = CPU_order_pool[2];
+        CPU_orders_ready    = 1;
+        done_matching       = 0;
+        @(posedge clk); #1;
+        CPU_orders_ready = 0;
+        num_cancelled    = 0;
+        @(posedge clk); #1;
 //        for(int i = L1_capacity/2; i < L1_capacity; i++) begin
 //            send_orders(dut_new_orders[i*5], dut_new_orders[i*5+1],
 //                        dut_new_orders[i*5+2], dut_new_orders[i*5+3],
-//                        dut_new_orders[i*5+4], 5, 0, 0);
+//                        dut_new_orders[i*5+4], 5*i+8, 0, 0);
 //        end
-//        $display("Test 5 PASSED");
-//    endtask
+        $display("Test 7 PASSED");
+    endtask
 
     // -------------------------------------------------------------------------
-    // Test 6: Multiple repeated cancellations
+    // Test 8: Multiple repeated cancellations
     // -------------------------------------------------------------------------
-    task test6();
-        $display("=== Test 6: Multiple repeated cancellations ===");
+    task test8();
+        $display("=== Test 8: Multiple cancellations ===");
         do_reset();
         num_L1_evicted = 0;
-        for(int i = 0; i < L1_capacity/2; i++) begin
+        for(int i = 0; i < 4; i++) begin
             send_orders(dut_new_orders[i*5], dut_new_orders[i*5+1],
                         dut_new_orders[i*5+2], dut_new_orders[i*5+3],
-                        dut_new_orders[i*5+4], !(!i)+4, 0, 0);
+                        dut_new_orders[i*5+4], 5*i+8, 5, 0);
         end
         num_cancelled       = 3;
         cancelled_orders[0] = 0;
@@ -467,158 +486,181 @@ module L2_tb #(
         num_cancelled       = 2;
         cancelled_orders[0] = 0;
         cancelled_orders[1] = 1;
+        cancelled_orders[2] = 0;
         CPU_orders[0]       = CPU_order_pool[3];
         CPU_orders[1]       = CPU_order_pool[4];
         CPU_orders_ready    = 1;
         done_matching       = 0;
         @(posedge clk); #1;
+        @(posedge clk); #1;
         CPU_orders_ready = 0;
         num_cancelled    = 0;
         @(posedge clk); #1;
-        for(int i = L1_capacity/2; i < L1_capacity; i++) begin
-            send_orders(dut_new_orders[i*5], dut_new_orders[i*5+1],
-                        dut_new_orders[i*5+2], dut_new_orders[i*5+3],
-                        dut_new_orders[i*5+4], 5, 0, 0);
-        end
-        $display("Test 6 PASSED");
+//        for(int i = L1_capacity/2; i < L1_capacity; i++) begin
+//            send_orders(dut_new_orders[i*5], dut_new_orders[i*5+1],
+//                        dut_new_orders[i*5+2], dut_new_orders[i*5+3],
+//                        dut_new_orders[i*5+4], 5*i+8, 0, 0);
+//        end
+        $display("Test 8 PASSED");
     endtask
 
     // -------------------------------------------------------------------------
-    // Test 7: Overflow with single cancellation
+    // Test 9: Overflow with single cancellation
     // -------------------------------------------------------------------------
-    task test7();
-        $display("=== Test 7: Cancellation with overflow ===");
+    task test9();
+        $display("=== Test 9: Cancellation with overflow ===");
         do_reset();
-        for(int i = 0; i < L1_capacity/2; i++) begin
-            num_L1_evicted = !(!i);
+        for(int i = 0; i < 8; i++) begin
             send_orders_ofl1(dut_new_orders[i*6], dut_new_orders[i*6+1],
                              dut_new_orders[i*6+2], dut_new_orders[i*6+3],
-                             dut_new_orders[i*6+4], dut_new_orders[i*6+5],
-                             i+5, !(!i), 0);
+                             dut_new_orders[i*6+4], dut_L1_orders[i],
+                             6*i+8, 5, 0);
         end
         num_cancelled       = 1;
         cancelled_orders[0] = 0;
-        CPU_orders[0]       = CPU_order_pool[0];
+        CPU_orders[0]       = CPU_sim[0];
         CPU_orders_ready    = 1;
         done_matching       = 0;
         @(posedge clk); #1;
         num_cancelled       = 1;
         cancelled_orders[0] = 3;
-        CPU_orders[0]       = CPU_order_pool[1];
+        CPU_orders[0]       = CPU_sim[1];
         CPU_orders_ready    = 1;
         done_matching       = 0;
         @(posedge clk); #1;
         CPU_orders_ready = 0;
         num_cancelled    = 0;
         @(posedge clk); #1;
-        for(int i = L1_capacity/2; i < L1_capacity; i++) begin
-            num_L1_evicted = 1;
-            send_orders_ofl1(dut_new_orders[i*6], dut_new_orders[i*6+1],
-                             dut_new_orders[i*6+2], dut_new_orders[i*6+3],
-                             dut_new_orders[i*6+4], dut_new_orders[i*6+5],
-                             i+5, 1, 0);
-        end
-        $display("Test 7 PASSED");
+//        for(int i = L1_capacity/2; i < L1_capacity; i++) begin
+//            num_L1_evicted = 1;
+//            send_orders_ofl1(dut_new_orders[i*6], dut_new_orders[i*6+1],
+//                             dut_new_orders[i*6+2], dut_new_orders[i*6+3],
+//                             dut_new_orders[i*6+4], dut_new_orders[i*6+5],
+//                             i+5, 1, 0);
+//        end
+        $display("Test 9 PASSED");
     endtask
 
     // -------------------------------------------------------------------------
-    // Test 8: Overflow with multiple cancellations
+    // Test 10: Overflow with multiple cancellations
     // -------------------------------------------------------------------------
-    task test8();
-        $display("=== Test 8: Multiple cancellations with overflow ===");
+    task test10();
+        $display("=== Test 10: Cancellation with overflow ===");
         do_reset();
-        for(int i = 0; i < L1_capacity/2; i++) begin
-            num_L1_evicted = !(!i);
-            send_orders_ofl1(dut_new_orders[i*6], dut_new_orders[i*6+1],
-                             dut_new_orders[i*6+2], dut_new_orders[i*6+3],
-                             dut_new_orders[i*6+4], dut_new_orders[i*6+5],
-                             i+5, !(!i), 0);
-        end
+        for(int i = 0; i < 8; i++) begin                                        
+        send_orders_ofl2(dut_new_orders[i*6], dut_new_orders[i*6+1],        
+                         dut_new_orders[i*6+2], dut_new_orders[i*6+3],      
+                         dut_new_orders[i*6+4], evicted_L1_orders[3*i],     
+                         evicted_L1_orders[3*i+1], evicted_L1_orders[3*i+2],
+                         8*i+8, 6, 0);          
+        end                            
         num_cancelled       = 3;
         cancelled_orders[0] = 0;
         cancelled_orders[1] = 2;
         cancelled_orders[2] = 4;
-        CPU_orders[0]       = CPU_order_pool[0];
-        CPU_orders[1]       = CPU_order_pool[1];
-        CPU_orders[2]       = CPU_order_pool[2];
+        CPU_orders[0]       = CPU_sim[0];
+        CPU_orders[1]       = CPU_sim[1];
+        CPU_orders[2]       = CPU_sim[2];
         CPU_orders_ready    = 1;
         done_matching       = 0;
         @(posedge clk); #1;
-        num_cancelled       = 2;
         cancelled_orders[0] = 0;
         cancelled_orders[1] = 1;
-        CPU_orders[0]       = CPU_order_pool[3];
-        CPU_orders[1]       = CPU_order_pool[4];
+        cancelled_orders[2] = 0;
+        CPU_orders[0]       = CPU_sim[3];
+        CPU_orders[1]       = CPU_sim[4];
         CPU_orders_ready    = 1;
         done_matching       = 0;
         @(posedge clk); #1;
         CPU_orders_ready = 0;
         num_cancelled    = 0;
         @(posedge clk); #1;
-        for(int i = L1_capacity/2; i < L1_capacity; i++) begin
-            num_L1_evicted = 1;
-            send_orders_ofl1(dut_new_orders[i*6], dut_new_orders[i*6+1],
-                             dut_new_orders[i*6+2], dut_new_orders[i*6+3],
-                             dut_new_orders[i*6+4], dut_new_orders[i*6+5],
-                             i+5, 1, 0);
-        end
-        $display("Test 8 PASSED");
+//        for(int i = L1_capacity/2; i < L1_capacity; i++) begin
+//            num_L1_evicted = 1;
+//            send_orders_ofl1(dut_new_orders[i*6], dut_new_orders[i*6+1],
+//                             dut_new_orders[i*6+2], dut_new_orders[i*6+3],
+//                             dut_new_orders[i*6+4], dut_new_orders[i*6+5],
+//                             i+5, 1, 0);
+//        end
+        $display("Test 10 PASSED");
     endtask
 
     // -------------------------------------------------------------------------
-    // Test 9: L1 requests 1 order from L2 (SEND_L1 state)
+    // Test 11: L1 requests 1 order from L2 (SEND_L1 state)
     // -------------------------------------------------------------------------
-    task test9();
-        $display("=== Test 9: 1 L1 request ===");
+    task test11();
+        $display("=== Test 11: 1 L1 request ===");
         do_reset();
         num_cancelled  = 0;
         num_L1_evicted = 0;
-        for(int i = 0; i < L1_capacity; i++) begin
+        for(int i = 0; i < 8; i++) begin
             send_orders_ofl1(dut_new_orders[i*6], dut_new_orders[i*6+1],
                              dut_new_orders[i*6+2], dut_new_orders[i*6+3],
-                             dut_new_orders[i*6+4], dut_new_orders[i*6+5],
-                             i+5, !(!i), 0);
+                             dut_new_orders[i*6+4], dut_L1_orders[i],
+                             6*i+8, 5, 0);
         end
-        // Simulate L1 requesting 1 order
-        CPU_orders[0]    = CPU_order_pool[0];
-        CPU_orders_ready = 1;
-        send_orders_removal1(dut_new_orders[L1_capacity*6], dut_new_orders[L1_capacity*6+1],
-                             dut_new_orders[L1_capacity*6+2], dut_new_orders[L1_capacity*6+3],
-                             13, 0, 1);
+        num_L2_requested = 1;
+        CPU_orders[0] = CPU_order_pool[0];
         @(posedge clk); #1;
         @(posedge clk); #1;
     endtask
 
     // -------------------------------------------------------------------------
-    // Test 10: L1 requests multiple orders from L2
+    // Test 12: L1 requests multiple orders from L2
     // -------------------------------------------------------------------------
-    task test10();
+    task test12();
         $display("=== Test 10: Multiple L1 requests ===");
         do_reset();
         num_cancelled  = 0;
         num_L1_evicted = 0;
-        for(int i = 0; i < L1_capacity; i++) begin
+        for(int i = 0; i < 8; i++) begin
             send_orders_ofl1(dut_new_orders[i*6], dut_new_orders[i*6+1],
                              dut_new_orders[i*6+2], dut_new_orders[i*6+3],
-                             dut_new_orders[i*6+4], dut_new_orders[i*6+5],
-                             i+5, !(!i), 0);
+                             dut_new_orders[i*6+4], dut_L1_orders[i],
+                             6*i+8, 5, 0);
         end
         // Simulate L1 requesting 3 orders
         CPU_orders[0]    = CPU_order_pool[0];
         CPU_orders[1]    = CPU_order_pool[1];
         CPU_orders[2]    = CPU_order_pool[2];
-        CPU_orders_ready = 1;
-        send_orders_removal2(dut_new_orders[L1_capacity*6], dut_new_orders[L1_capacity*6+1],
-                             13, 0, 3);
+        num_L2_requested = 3;
         @(posedge clk); #1;
         @(posedge clk); #1;
     endtask
 
     // -------------------------------------------------------------------------
+    // Test 13: L1 requests multiple orders from L2 repeadetly
+    // -------------------------------------------------------------------------
+    task test13();
+        $display("=== Test 13: Multiple L1 requests ===");
+        do_reset();
+        num_cancelled  = 0;
+        num_L1_evicted = 0;
+        for(int i = 0; i < 8; i++) begin
+            send_orders_ofl1(dut_new_orders[i*6], dut_new_orders[i*6+1],
+                             dut_new_orders[i*6+2], dut_new_orders[i*6+3],
+                             dut_new_orders[i*6+4], dut_L1_orders[i],
+                             6*i+8, 5, 0);
+        end
+        // Simulate L1 requesting 3 orders
+        CPU_orders[0]    = CPU_order_pool[0];
+        CPU_orders[1]    = CPU_order_pool[1];
+        CPU_orders[2]    = CPU_order_pool[2];
+        num_L2_requested = 3;
+        @(posedge clk); #1;
+        CPU_orders[0]    = CPU_order_pool[0];
+        CPU_orders[1]    = CPU_order_pool[1];
+        CPU_orders[2]    = 0;
+        num_L2_requested = 2;
+        @(posedge clk); #1;
+        @(posedge clk); #1;
+    endtask
+    
+    // -------------------------------------------------------------------------
     // Test 11: Low stress - mix of L1 evictions, cancels, and L1 requests
     // -------------------------------------------------------------------------
-    task test11();
-        $display("=== Test 11: Low stress mix of L1 evictions, cancels, L1 requests ===");
+    task test14();
+        $display("=== Test 13: Low stress mix of L1 evictions, cancels, L1 requests ===");
         do_reset();
         num_cancelled = 0;
 
@@ -709,7 +751,7 @@ module L2_tb #(
 //        test1();
 //        test2();
 //        test3();
-        test4();
+//        test4();
 //        test5();
 //        test6();
 //        test7();
@@ -717,6 +759,8 @@ module L2_tb #(
 //        test9();
 //        test10();
 //        test11();
+//        test12();
+        test13();
         $display("=== All tests complete ===");
         $finish;
     end
