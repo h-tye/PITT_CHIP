@@ -28,6 +28,7 @@ module Matching_Core #(
     parameter order_width = timestamp_bits + orderID_bits + price_bits + qty_bits,
     parameter num_incoming_orders = 1
     )(
+    input en, 
     input logic [price_bits-1:0] buy_price,
     input logic [price_bits-1:0] sell_price,
     input logic [qty_bits-1:0] buy_qty,
@@ -42,30 +43,40 @@ module Matching_Core #(
 
 
     always_comb begin
-        if(buy_price >= sell_price) begin
-            if(buy_qty > sell_qty) begin
-                next_buy_qty = buy_qty - sell_qty;
-                next_sell_qty = 0;
-                buy_pfilled = 1;
-                buy_filled = 0;
-                sell_pfilled = 1;
-                sell_filled = 0;
-            end
-            else if(sell_qty > buy_qty) begin
-                next_buy_qty = 0;
-                next_sell_qty = sell_qty - buy_qty;
-                buy_pfilled = 0;
-                buy_filled = 1;
-                sell_pfilled = 0;
-                sell_filled = 1;
+        if(en) begin
+            if(buy_price >= sell_price) begin
+                if(buy_qty > sell_qty) begin
+                    next_buy_qty = buy_qty - sell_qty;
+                    next_sell_qty = 0;
+                    buy_pfilled = 1;
+                    buy_filled = 0;
+                    sell_pfilled = 1;
+                    sell_filled = 0;
+                end
+                else if(sell_qty > buy_qty) begin
+                    next_buy_qty = 0;
+                    next_sell_qty = sell_qty - buy_qty;
+                    buy_pfilled = 0;
+                    buy_filled = 1;
+                    sell_pfilled = 0;
+                    sell_filled = 1;
+                end
+                else begin
+                    next_buy_qty = 0;
+                    next_sell_qty = 0;
+                    buy_pfilled = 0;
+                    buy_filled = 1;
+                    sell_pfilled = 0;
+                    sell_filled = 1;
+                end
             end
             else begin
-                next_buy_qty = 0;
-                next_sell_qty = 0;
+                next_buy_qty = buy_qty;
+                next_sell_qty = sell_qty;
                 buy_pfilled = 0;
-                buy_filled = 1;
+                buy_filled = 0;
                 sell_pfilled = 0;
-                sell_filled = 1;
+                sell_filled = 0;
             end
         end
         else begin
