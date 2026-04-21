@@ -60,12 +60,12 @@ module MatchingEngine #(
     logic [num_incoming_orders-1:0] new_candidate_sell;
     logic [$clog2(num_incoming_orders)-1:0] new_in_curr_price_buy;
     logic [$clog2(num_incoming_orders)-1:0] new_in_curr_price_sell;
-    logic [num_incoming_orders*2-1:0] buy_filled;
-    logic [num_incoming_orders*2-1:0] sell_filled;
-    logic [num_incoming_orders*2-1:0] buy_pfilled;
-    logic [num_incoming_orders*2-1:0] sell_pfilled;
-    logic [qty_bits-1:0] residual_buy_qty [num_incoming_orders*2][num_incoming_orders*2+1];
-    logic [qty_bits-1:0] residual_sell_qty [num_incoming_orders*2+1][num_incoming_orders*2+1];
+//    logic [num_incoming_orders*2-1:0] buy_filled [num_incoming_orders*2-1:0];
+//    logic [num_incoming_orders*2-1:0] sell_filled [num_incoming_orders*2-1:0];
+//    logic [num_incoming_orders*2-1:0] buy_pfilled [num_incoming_orders*2-1:0];
+//    logic [num_incoming_orders*2-1:0] sell_pfilled [num_incoming_orders*2-1:0];
+    logic [qty_bits-1:0] residual_buy_qty [num_incoming_orders*2][num_incoming_orders*2];
+    logic [qty_bits-1:0] residual_sell_qty [num_incoming_orders*2+1][num_incoming_orders*2];
     logic core_en [num_incoming_orders*2][num_incoming_orders*2];
     logic [$clog2(num_incoming_orders*2)-1:0] stage_num;
     logic done_eval;
@@ -168,10 +168,10 @@ module MatchingEngine #(
             num_candidate_incoming_sell <= 0;
             new_candidate_buy <= 0;
             new_candidate_sell <= 0;
-            buy_filled <= 0;
-            sell_filled <= 0;
-            buy_pfilled <= 0;
-            sell_pfilled <= 0;
+//            buy_filled <= 0;
+//            sell_filled <= 0;
+//            buy_pfilled <= 0;
+//            sell_pfilled <= 0;
             num_orders_filled_buy <= 0;
             num_orders_filled_sell <= 0;
             new_orders_filled_buy <= 0;
@@ -195,11 +195,11 @@ module MatchingEngine #(
                 outgoing_orders_sell[i] <= 0;
             end
             // Initialize matching cores so we don't waste a cycle
-            for (r = 0; r < num_incoming_orders; r++) begin
-                core_en[r][0] <= 1;
+            for (r = 0; r < num_incoming_orders*2; r++) begin
+                core_en[r][0] <= 0;
             end
-            for (c = 0; c < num_incoming_orders; c++) begin
-                core_en[0][c] <= 1;
+            for (c = 0; c < num_incoming_orders*2; c++) begin
+                core_en[0][c] <= 0;
             end
         end
         else if(next_state == LOAD1) begin
@@ -276,6 +276,13 @@ module MatchingEngine #(
             for(j = num_incoming_orders + num_candidate_incoming_sell; j < 2*num_incoming_orders; j++) begin
                 candidate_sells[j] <= 0;
             end
+            // Enable cores for next cycle
+            for (r = 0; r < num_incoming_orders*2; r++) begin
+                core_en[r][0] <= 1;
+            end
+            for (c = 0; c < num_incoming_orders*2; c++) begin
+                core_en[0][c] <= 1;
+            end
         end
         else if(next_state == MATCH) begin
             stage_num <= stage_num + 1;
@@ -289,13 +296,13 @@ module MatchingEngine #(
                         core_en[r][c] = 0;
                     end
                     // Horizontal propagation (right)
-//                    if(r == stage_num) begin
-//                        candidate_buys[c+1][qty_bits-1:0] <= residual_buy_qty[r][c];
-//                    end
-//                    // Vertical progagation (below)
-//                    if(c == stage_num) begin
-//                        candidate_sells[r+1][c][qty_bits-1:0] <= residual_sell_qty[r][c];
-//                    end
+                    if(r == stage_num) begin
+                        residual_buy_qty[r][c+1] <= residual_buy_qty[r][c];
+                    end
+                    // Vertical progagation (below)
+                    if(c == stage_num) begin
+                        residual_sell_qty[r+1][c] <= residual_sell_qty[r][c];
+                    end
                 end
             end
             if(residual_sell_qty[stage_num][num_incoming_orders*2-1] == 0) begin
@@ -390,20 +397,20 @@ module MatchingEngine #(
     genvar row, col;
     generate
         // Grid Iron
-        for(row = 0; row < num_incoming_orders*2;row++) begin
+        for (row = 0; row < num_incoming_orders*2; row++) begin : row_loop
             for (col = 0; col < num_incoming_orders*2; col++) begin : col_loop
                 Matching_Core core_inst (
-                    .buy_price  (candidate_buys[r][price_bits+qty_bits-1 -: price_bits]),
-                    .buy_qty    (candidate_buys[r][qty_bits-1:0]),
-                    .sell_price (candidate_sells[c][price_bits+qty_bits-1 -: price_bits]),
-                    .sell_qty   (candidate_sells[c][qty_bits-1:0]),
-                    .en(core_en[row][col]),
-                    .next_buy_qty (residual_buy_qty[row][col]),
-                    .next_sell_qty (residual_sell_qty[row][col]),
-                    .buy_filled(buy_filled[row]),  // These are redundant signals and can be scrapped
-                    .sell_filled(sell_filled[col]),
-                    .buy_pfilled(buy_pfilled[row]),
-                    .sell_pfilled(sell_pfilled[col])
+                    .en         (core_en[row][col]),
+                    .buy_price  (candidate_buys[col][price_bits+qty_bits-1 -: price_bits]),
+                    .buy_qty    (row == 0
+                                 ? candidate_buys[col][qty_bits-1:0]
+                                 : residual_buy_qty[row-1][col]),
+                    .sell_price (candidate_sells[row][price_bits+qty_bits-1 -: price_bits]),
+                    .sell_qty   (col == 0
+                                 ? candidate_sells[row][qty_bits-1:0]
+                                 : residual_sell_qty[row][col-1]),
+                    .next_buy_qty  (residual_buy_qty[row][col]),
+                    .next_sell_qty (residual_sell_qty[row][col])
                 );
             end
         end
