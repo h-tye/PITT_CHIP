@@ -34,58 +34,56 @@ module Matching_Core #(
     input logic [qty_bits-1:0] buy_qty,
     input logic [qty_bits-1:0] sell_qty,
     output logic [qty_bits-1:0] next_buy_qty,
-    output logic [qty_bits-1:0] next_sell_qty,
-    output logic buy_filled,
-    output logic sell_filled,
-    output logic buy_pfilled,
-    output logic sell_pfilled
+    output logic [qty_bits-1:0] next_sell_qty
+//    output logic buy_filled,
+//    output logic sell_filled,
+//    output logic buy_pfilled,
+//    output logic sell_pfilled
     );
 
 
     always_comb begin
+        next_buy_qty  = 0;
+        next_sell_qty = 0;
+//        buy_pfilled   = 0;
+//        buy_filled    = 0;
+//        sell_pfilled  = 0;
+//        sell_filled   = 0;
         if(en) begin
             if(buy_price >= sell_price) begin
                 if(buy_qty > sell_qty) begin
                     next_buy_qty = buy_qty - sell_qty;
                     next_sell_qty = 0;
-                    buy_pfilled = 1;
-                    buy_filled = 0;
-                    sell_pfilled = 1;
-                    sell_filled = 0;
+//                    buy_pfilled = 1;
+//                    buy_filled = 0;
+//                    sell_pfilled = 1;
+//                    sell_filled = 0;
                 end
                 else if(sell_qty > buy_qty) begin
                     next_buy_qty = 0;
                     next_sell_qty = sell_qty - buy_qty;
-                    buy_pfilled = 0;
-                    buy_filled = 1;
-                    sell_pfilled = 0;
-                    sell_filled = 1;
+//                    buy_pfilled = 0;
+//                    buy_filled = 1;
+//                    sell_pfilled = 0;
+//                    sell_filled = 1;
                 end
                 else begin
                     next_buy_qty = 0;
                     next_sell_qty = 0;
-                    buy_pfilled = 0;
-                    buy_filled = 1;
-                    sell_pfilled = 0;
-                    sell_filled = 1;
+//                    buy_pfilled = 0;
+//                    buy_filled = 1;
+//                    sell_pfilled = 0;
+//                    sell_filled = 1;
                 end
             end
             else begin
                 next_buy_qty = buy_qty;
                 next_sell_qty = sell_qty;
-                buy_pfilled = 0;
-                buy_filled = 0;
-                sell_pfilled = 0;
-                sell_filled = 0;
+//                buy_pfilled = 0;
+//                buy_filled = 0;
+//                sell_pfilled = 0;
+//                sell_filled = 0;
             end
-        end
-        else begin
-            next_buy_qty = buy_qty;
-            next_sell_qty = sell_qty;
-            buy_pfilled = 0;
-            buy_filled = 0;
-            sell_pfilled = 0;
-            sell_filled = 0;
         end
     end
 endmodule
