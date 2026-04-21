@@ -60,10 +60,6 @@ module MatchingEngine #(
     logic [num_incoming_orders-1:0] new_candidate_sell;
     logic [$clog2(num_incoming_orders)-1:0] new_in_curr_price_buy;
     logic [$clog2(num_incoming_orders)-1:0] new_in_curr_price_sell;
-//    logic [num_incoming_orders*2-1:0] buy_filled [num_incoming_orders*2-1:0];
-//    logic [num_incoming_orders*2-1:0] sell_filled [num_incoming_orders*2-1:0];
-//    logic [num_incoming_orders*2-1:0] buy_pfilled [num_incoming_orders*2-1:0];
-//    logic [num_incoming_orders*2-1:0] sell_pfilled [num_incoming_orders*2-1:0];
     logic [qty_bits-1:0] residual_buy_qty [num_incoming_orders*2][num_incoming_orders*2];
     logic [qty_bits-1:0] residual_sell_qty [num_incoming_orders*2+1][num_incoming_orders*2];
     logic core_en [num_incoming_orders*2][num_incoming_orders*2];
@@ -164,14 +160,11 @@ module MatchingEngine #(
     always_ff @(posedge clk or negedge rstn) begin
         if(!rstn) begin
             stage_num <= 0;
+            done_eval <= 0;
             num_candidate_incoming_buy <= 0;
             num_candidate_incoming_sell <= 0;
             new_candidate_buy <= 0;
             new_candidate_sell <= 0;
-//            buy_filled <= 0;
-//            sell_filled <= 0;
-//            buy_pfilled <= 0;
-//            sell_pfilled <= 0;
             num_orders_filled_buy <= 0;
             num_orders_filled_sell <= 0;
             new_orders_filled_buy <= 0;
@@ -277,6 +270,7 @@ module MatchingEngine #(
                 candidate_sells[j] <= 0;
             end
             // Enable cores for next cycle
+            done_eval <= 0;
             for (r = 0; r < num_incoming_orders*2; r++) begin
                 core_en[r][0] <= 1;
             end
@@ -289,7 +283,7 @@ module MatchingEngine #(
             for (r = 0; r < num_incoming_orders*2; r++) begin
                 for(c = 0; c < num_incoming_orders*2;c++) begin
                     // Set enable or core
-                    if(r == stage_num || c == stage_num) begin
+                    if((r == stage_num + 1 && c >= stage_num + 1) || (c == stage_num + 1 && r >= stage_num + 1)) begin
                         core_en[r][c] = 1;
                     end
                     else begin
@@ -309,7 +303,7 @@ module MatchingEngine #(
                 num_orders_filled_sell <= num_orders_filled_sell + 1;
                 new_orders_filled_sell <= new_orders_filled_sell + candidate_sells[stage_num][order_width];  // Marked new
             end
-            if(residual_buy_qty[stage_num][num_incoming_orders*2-1] == 0) begin
+            if(residual_buy_qty[num_incoming_orders*2-1][stage_num] == 0) begin
                 num_orders_filled_buy <= num_orders_filled_buy + 1;
                 new_orders_filled_buy <= new_orders_filled_buy + candidate_buys[stage_num][order_width];
             end
