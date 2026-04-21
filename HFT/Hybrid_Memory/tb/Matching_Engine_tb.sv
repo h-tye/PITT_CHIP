@@ -119,10 +119,10 @@ module Matching_Engine_tb #(
     //
     // top_buy_ptr = top_sell_ptr = 4  (4 orders in current best price level)
     // -------------------------------------------------------------------------
-    localparam BEST_BUY_PRICE  = 16'd110;
-    localparam BEST_SELL_PRICE = 16'd90;
-    localparam WORSE_BUY_PRICE = 16'd100;  // Below best buy  -> CPU
-    localparam WORSE_SELL_PRICE= 16'd95;   // Above best sell -> CPU
+    localparam BEST_BUY_PRICE  = 16'd100; // Set up so new orders match but nothing else does
+    localparam BEST_SELL_PRICE = 16'd100;
+    localparam WORSE_BUY_PRICE = 16'd90;  // Below best buy  -> CPU
+    localparam WORSE_SELL_PRICE= 16'd110;   // Above best sell -> CPU
     localparam TOP_PTR         = 4;
 
     task load_stimulus();
@@ -357,6 +357,17 @@ module Matching_Engine_tb #(
 
         $display("Test LOAD4 PASSED");
     endtask
+    
+    task test_MATCH1();
+        $display("=== Test MATCH1 ===");
+        @(posedge clk); #1;
+        
+    endtask
+    task test_MATCH2();
+        $display("=== Test MATCH2 ===");
+        @(posedge clk); #1;
+        
+    endtask
 
     // -------------------------------------------------------------------------
     // Run all tests
@@ -381,6 +392,8 @@ module Matching_Engine_tb #(
         test_LOAD2();
         test_LOAD3();
         test_LOAD4();
+        test_MATCH1();
+        test_MATCH2();
 
         $display("=== All Matching Engine LOAD tests complete ===");
         $finish;
