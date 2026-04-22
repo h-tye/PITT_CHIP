@@ -73,6 +73,8 @@ module MatchingEngine #(
     logic [$clog2(num_incoming_orders)-1:0] new_orders_filled_sell;
     logic [$clog2(num_incoming_orders*2)-1:0] out_top_ptr_buy;
     logic [$clog2(num_incoming_orders*2)-1:0] out_top_ptr_sell;
+    wire [qty_bits-1:0] buy_qty_wire [num_incoming_orders*2][num_incoming_orders*2];
+    wire [qty_bits-1:0] sell_qty_wire [num_incoming_orders*2][num_incoming_orders*2];
     
     
     typedef enum logic [3:0] {
@@ -187,16 +189,10 @@ module MatchingEngine #(
                 for(j = 0; j < num_incoming_orders*2; j++) begin
                     residual_buy_qty[i][j] <= 0;
                     residual_sell_qty[i][j] <= 0;
+                    core_en[i][j] <= 0;
                 end
                 outgoing_orders_buy[i] <= 0;
                 outgoing_orders_sell[i] <= 0;
-            end
-            // Initialize matching cores so we don't waste a cycle
-            for (r = 0; r < num_incoming_orders*2; r++) begin
-                core_en[r][0] <= 0;
-            end
-            for (c = 0; c < num_incoming_orders*2; c++) begin
-                core_en[0][c] <= 0;
             end
         end
         else if(next_state == LOAD1) begin
@@ -295,13 +291,11 @@ module MatchingEngine #(
                     else begin
                         core_en[r][c] = 0;
                     end
-                    // Horizontal propagation (right)
-                    if((r == stage_num + 1 && c >= stage_num + 1)) begin
-                        residual_buy_qty[r][c+1] <= residual_buy_qty[r][c];
+                    if (r == stage_num && c >= stage_num) begin
+                        residual_buy_qty[r][c]  <= buy_qty_wire[r][c];
                     end
-                    // Vertical progagation (below)
-                    if((c == stage_num + 1 && r >= stage_num + 1)) begin
-                        residual_sell_qty[r+1][c] <= residual_sell_qty[r][c];
+                    if (c == stage_num && r >= stage_num) begin
+                        residual_sell_qty[r][c] <= sell_qty_wire[r][c];
                     end
                 end
             end
@@ -396,27 +390,39 @@ module MatchingEngine #(
     end
     
     // Generate grid of matching cores, populate with candidate buys/sells
+    wire [qty_bits-1:0] input_buy_qty [num_incoming_orders*2][num_incoming_orders*2];
+    wire [qty_bits-1:0] input_sell_qty[num_incoming_orders*2][num_incoming_orders*2];
     genvar row, col;
     generate
-        // Grid Iron
         for (row = 0; row < num_incoming_orders*2; row++) begin : row_loop
             for (col = 0; col < num_incoming_orders*2; col++) begin : col_loop
+    
+                // Buy qty input
+                assign input_buy_qty[row][col] = (row == 0)
+                    ? candidate_buys[col][qty_bits-1:0]
+                    : (core_en[row][col] && row != col        // exclude corner - corner reads register
+                        ? buy_qty_wire[row-1][col]
+                        : residual_buy_qty[row-1][col]);
+                
+                // Sell qty input
+                assign input_sell_qty[row][col] = (col == 0)
+                    ? candidate_sells[row][qty_bits-1:0]
+                    : (core_en[row][col] && row != col        // exclude corner - corner reads register
+                        ? sell_qty_wire[row][col-1]
+                        : residual_sell_qty[row][col-1]);
+    
                 Matching_Core core_inst (
-                    .en         (core_en[row][col]),
-                    .buy_filled (buys_filled[col]),
-                    .sell_filled(sells_filled[row]),
-                    .buy_price  (candidate_buys[col][price_bits+qty_bits-1 -: price_bits]),
-                    .buy_qty    (row == 0
-                                 ? candidate_buys[col][qty_bits-1:0]
-                                 : residual_buy_qty[row-1][col]),
-                    .sell_price (candidate_sells[row][price_bits+qty_bits-1 -: price_bits]),
-                    .sell_qty   (col == 0
-                                 ? candidate_sells[row][qty_bits-1:0]
-                                 : residual_sell_qty[row][col-1]),
-                    .next_buy_qty  (residual_buy_qty[row][col]),
-                    .next_sell_qty (residual_sell_qty[row][col])
+                    .en          (core_en[row][col]),
+                    .buy_filled  (buys_filled[col]),
+                    .sell_filled (sells_filled[row]),
+                    .buy_price   (candidate_buys[col][price_bits+qty_bits-1 -: price_bits]),
+                    .buy_qty     (input_buy_qty[row][col]),
+                    .sell_price  (candidate_sells[row][price_bits+qty_bits-1 -: price_bits]),
+                    .sell_qty    (input_sell_qty[row][col]),
+                    .next_buy_qty  (buy_qty_wire[row][col]),
+                    .next_sell_qty (sell_qty_wire[row][col])
                 );
             end
         end
-    endgenerate                
+    endgenerate              
 endmodule
