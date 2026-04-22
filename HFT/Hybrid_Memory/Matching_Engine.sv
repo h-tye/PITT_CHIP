@@ -61,9 +61,11 @@ module MatchingEngine #(
     logic [$clog2(num_incoming_orders)-1:0] new_in_curr_price_buy;
     logic [$clog2(num_incoming_orders)-1:0] new_in_curr_price_sell;
     logic [qty_bits-1:0] residual_buy_qty [num_incoming_orders*2][num_incoming_orders*2];
-    logic [qty_bits-1:0] residual_sell_qty [num_incoming_orders*2+1][num_incoming_orders*2];
+    logic [qty_bits-1:0] residual_sell_qty [num_incoming_orders*2][num_incoming_orders*2];
     logic core_en [num_incoming_orders*2][num_incoming_orders*2];
     logic [$clog2(num_incoming_orders*2)-1:0] stage_num;
+    logic [num_incoming_orders*2-1:0] buys_filled;
+    logic [num_incoming_orders*2-1:0] sells_filled;
     logic done_eval;
     logic [$clog2(num_incoming_orders)-1:0] num_orders_filled_buy;
     logic [$clog2(num_incoming_orders)-1:0] num_orders_filled_sell;
@@ -165,6 +167,8 @@ module MatchingEngine #(
             num_candidate_incoming_sell <= 0;
             new_candidate_buy <= 0;
             new_candidate_sell <= 0;
+            buys_filled <= 0;
+            sells_filled <= 0;
             num_orders_filled_buy <= 0;
             num_orders_filled_sell <= 0;
             new_orders_filled_buy <= 0;
@@ -271,6 +275,8 @@ module MatchingEngine #(
             end
             // Enable cores for next cycle
             done_eval <= 0;
+            buys_filled <= 0;
+            sells_filled <= 0;
             for (r = 0; r < num_incoming_orders*2; r++) begin
                 core_en[r][0] <= 1;
             end
@@ -290,25 +296,27 @@ module MatchingEngine #(
                         core_en[r][c] = 0;
                     end
                     // Horizontal propagation (right)
-                    if(r == stage_num) begin
+                    if((r == stage_num + 1 && c >= stage_num + 1)) begin
                         residual_buy_qty[r][c+1] <= residual_buy_qty[r][c];
                     end
                     // Vertical progagation (below)
-                    if(c == stage_num) begin
+                    if((c == stage_num + 1 && r >= stage_num + 1)) begin
                         residual_sell_qty[r+1][c] <= residual_sell_qty[r][c];
                     end
                 end
             end
             if(residual_sell_qty[stage_num][num_incoming_orders*2-1] == 0) begin
+                sells_filled[stage_num] = 1;
                 num_orders_filled_sell <= num_orders_filled_sell + 1;
                 new_orders_filled_sell <= new_orders_filled_sell + candidate_sells[stage_num][order_width];  // Marked new
             end
             if(residual_buy_qty[num_incoming_orders*2-1][stage_num] == 0) begin
+                buys_filled[stage_num] = 1;
                 num_orders_filled_buy <= num_orders_filled_buy + 1;
                 new_orders_filled_buy <= new_orders_filled_buy + candidate_buys[stage_num][order_width];
             end
             if(residual_sell_qty[stage_num][num_incoming_orders*2-1] == candidate_sells[stage_num][qty_bits-1:0] && 
-                residual_buy_qty[stage_num][num_incoming_orders*2-1] == candidate_buys[stage_num][qty_bits-1:0]) begin
+                residual_buy_qty[num_incoming_orders*2-1][stage_num] == candidate_buys[stage_num][qty_bits-1:0]) begin
                 done_eval <= 1;
             end
         end
@@ -395,6 +403,8 @@ module MatchingEngine #(
             for (col = 0; col < num_incoming_orders*2; col++) begin : col_loop
                 Matching_Core core_inst (
                     .en         (core_en[row][col]),
+                    .buy_filled (buys_filled[col]),
+                    .sell_filled(sells_filled[row]),
                     .buy_price  (candidate_buys[col][price_bits+qty_bits-1 -: price_bits]),
                     .buy_qty    (row == 0
                                  ? candidate_buys[col][qty_bits-1:0]
