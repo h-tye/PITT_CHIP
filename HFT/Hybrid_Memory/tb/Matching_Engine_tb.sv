@@ -368,6 +368,16 @@ module Matching_Engine_tb #(
         @(posedge clk); #1;
         
     endtask
+    task test_MATCH3();
+        $display("=== Test MATCH3 ===");
+        @(posedge clk); #1;
+        
+    endtask
+    task test_SEND1();
+        $display("=== Test SEND1 ===");
+        @(posedge clk); #1;
+        
+    endtask
 
     // -------------------------------------------------------------------------
     // Run all tests
@@ -394,6 +404,8 @@ module Matching_Engine_tb #(
         test_LOAD4();
         test_MATCH1();
         test_MATCH2();
+        test_MATCH3();
+        test_SEND1();
 
         $display("=== All Matching Engine LOAD tests complete ===");
         $finish;
