@@ -71,8 +71,8 @@ module MatchingEngine #(
     logic [$clog2(num_incoming_orders)-1:0] num_orders_filled_sell;
     logic [$clog2(num_incoming_orders)-1:0] new_orders_filled_buy;
     logic [$clog2(num_incoming_orders)-1:0] new_orders_filled_sell;
-    logic [$clog2(L1_capacity)-1:0] L1_top_ptr_buy;
-    logic [$clog2(L1_capacity)-1:0] L1_top_ptr_sell;
+    logic [$clog2(L1_capacity)-1:0] out_top_ptr_buy;
+    logic [$clog2(L1_capacity)-1:0] out_top_ptr_sell;
     
     
     typedef enum logic [3:0] {
@@ -179,8 +179,8 @@ module MatchingEngine #(
             num_orders_sell_removed <= 0;
             new_in_curr_price_buy <= 0;
             new_in_curr_price_sell <= 0;
-            L1_top_ptr_buy <= 0;
-            L1_top_ptr_sell <= 0;
+            out_top_ptr_buy <= 0;
+            out_top_ptr_sell <= 0;
             for(i = 0; i < num_incoming_orders*2; i++) begin
                 candidate_buys[i] <= 0;
                 candidate_sells[i] <= 0;
@@ -328,7 +328,7 @@ module MatchingEngine #(
             else begin
                 num_orders_buy_added <= num_incoming_orders - num_orders_filled_buy;
             end
-            if(num_orders_filled_sell > num_candidate_incoming_sell) begin
+            if(num_orders_filled_sell > num_incoming_orders) begin
                 num_orders_sell_removed <= num_orders_filled_sell - num_incoming_orders;
             end
             else begin
@@ -337,28 +337,30 @@ module MatchingEngine #(
             // Push matchable orders back to top of OB
             for(i = 0; i < num_incoming_orders*2; i = i + 1) begin
                 // Buy
-                if(residual_buy_qty[i][num_incoming_orders*2-1] != 0 && L1_top_ptr_buy < L1_capacity) begin  // If not filled, has to go back to L1
-                    outgoing_orders_buy[i][order_width-1 -: 3] <= 3'b001;  // To L1
-                    outgoing_orders_buy[i][order_width-5] <= 1'b1;         // Insert into start of queue
-                    outgoing_orders_buy[i][order_width-5:0] <= candidate_buys[i];
-                    L1_top_ptr_buy = L1_top_ptr_buy + 1;
+                if(buys_filled[i] == 0 && out_top_ptr_buy < L1_capacity && i < num_candidate_incoming_buy + num_incoming_orders) begin  // If not filled, has to go back to L1
+                    outgoing_orders_buy[out_top_ptr_buy][order_width-1 -: 3] <= 3'b001;  // To L1
+                    outgoing_orders_buy[out_top_ptr_buy][order_width-5] <= 1'b1;         // Insert into start of queue
+                    outgoing_orders_buy[out_top_ptr_buy][order_width-5:0] <= candidate_buys[i];
+                    out_top_ptr_buy = out_top_ptr_buy + 1;
                 end
-                else if(residual_buy_qty[i][num_incoming_orders*2-1] == 0) begin  // L1 out of room
-                    outgoing_orders_buy[i][order_width-1 -: 3] <= 3'b010;  // To L2
-                    outgoing_orders_buy[i][order_width-5] <= 1'b1;         // Insert into start of queue
-                    outgoing_orders_buy[i][order_width-5:0] <= candidate_buys[i];
+                else if(buys_filled[i] == 0 && i < num_candidate_incoming_buy + num_incoming_orders) begin  // L1 out of room
+                    outgoing_orders_buy[out_top_ptr_buy][order_width-1 -: 3] <= 3'b010;  // To L2
+                    outgoing_orders_buy[out_top_ptr_buy][order_width-5] <= 1'b1;         // Insert into start of queue
+                    outgoing_orders_buy[out_top_ptr_buy][order_width-5:0] <= candidate_buys[i];
+                    out_top_ptr_buy = out_top_ptr_buy + 1;
                 end
                 // Sell
-                if(residual_sell_qty[i][num_incoming_orders*2-1] != 0 && L1_top_ptr_sell < L1_capacity) begin
-                    outgoing_orders_sell[i][order_width-1 -: 3] <= 3'b001;  // To L1
-                    outgoing_orders_sell[i][order_width-5] <= 1'b1;         // Insert into start of queue
-                    outgoing_orders_sell[i][order_width-5:0] <= candidate_sells[i];
-                    L1_top_ptr_sell = L1_top_ptr_sell + 1;
+                if(sells_filled[i] == 0 && out_top_ptr_sell < L1_capacity && i < num_candidate_incoming_sell + num_incoming_orders) begin
+                    outgoing_orders_sell[out_top_ptr_sell][order_width-1 -: 3] <= 3'b001;  // To L1
+                    outgoing_orders_sell[out_top_ptr_sell][order_width-5] <= 1'b1;         // Insert into start of queue
+                    outgoing_orders_sell[out_top_ptr_sell][order_width-5:0] <= candidate_sells[i];
+                    out_top_ptr_sell = out_top_ptr_sell + 1;
                 end
-                else if(residual_sell_qty[i][num_incoming_orders*2-1] == 0) begin  // L1 out of room
-                    outgoing_orders_sell[i][order_width-1 -: 3] <= 3'b010;  // To L2
-                    outgoing_orders_sell[i][order_width-5] <= 1'b1;         // Insert into start of queue
-                    outgoing_orders_sell[i][order_width-5:0] <= candidate_sells[i];
+                else if(sells_filled[i] == 0 && i < num_candidate_incoming_sell + num_incoming_orders) begin  // L1 out of room
+                    outgoing_orders_sell[out_top_ptr_sell][order_width-1 -: 3] <= 3'b010;  // To L2
+                    outgoing_orders_sell[out_top_ptr_sell][order_width-5] <= 1'b1;         // Insert into start of queue
+                    outgoing_orders_sell[out_top_ptr_sell][order_width-5:0] <= candidate_sells[i];
+                    out_top_ptr_sell = out_top_ptr_sell + 1;
                 end
             end
         end
