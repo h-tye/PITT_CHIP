@@ -71,8 +71,8 @@ module MatchingEngine #(
     logic [$clog2(num_incoming_orders)-1:0] num_orders_filled_sell;
     logic [$clog2(num_incoming_orders)-1:0] new_orders_filled_buy;
     logic [$clog2(num_incoming_orders)-1:0] new_orders_filled_sell;
-    logic [$clog2(L1_capacity)-1:0] out_top_ptr_buy;
-    logic [$clog2(L1_capacity)-1:0] out_top_ptr_sell;
+    logic [$clog2(num_incoming_orders*2)-1:0] out_top_ptr_buy;
+    logic [$clog2(num_incoming_orders*2)-1:0] out_top_ptr_sell;
     
     
     typedef enum logic [3:0] {
@@ -349,6 +349,7 @@ module MatchingEngine #(
                     outgoing_orders_buy[out_top_ptr_buy][order_width-5:0] <= candidate_buys[i];
                     out_top_ptr_buy = out_top_ptr_buy + 1;
                 end
+                
                 // Sell
                 if(sells_filled[i] == 0 && out_top_ptr_sell < L1_capacity && i < num_candidate_incoming_sell + num_incoming_orders) begin
                     outgoing_orders_sell[out_top_ptr_sell][order_width-1 -: 3] <= 3'b001;  // To L1
@@ -363,38 +364,35 @@ module MatchingEngine #(
                     out_top_ptr_sell = out_top_ptr_sell + 1;
                 end
             end
-        end
+        end  
         else if(next_state == SEND2) begin
-            // New order handling
             for(i = 0; i < num_incoming_orders; i++) begin
-                if(new_buys[i][price_bits+qty_bits-1 -: price_bits] == best_buy_price && 
-                top_buy_ptr < L2_capacity + num_orders_buy_added && top_buy_ptr > L1_capacity + num_orders_buy_added
-                && !new_candidate_buy[i]) begin
-                    outgoing_orders_buy[i][order_width-1 -: 3] <= 3'b010;  // To L2
-                    outgoing_orders_buy[i][order_width-4] <= 1'b0;         // Insert into end of FIFO
-                    outgoing_orders_buy[i][order_width-5:0] <= candidate_buys[i];
+                if(new_buys[i][price_bits+qty_bits-1 -: price_bits] == best_buy_price
+                && !new_candidate_buy[i] && out_top_ptr_buy > L1_capacity && top_buy_ptr < L2_capacity) begin
+                    outgoing_orders_buy[out_top_ptr_buy][order_width-1 -: 3] <= 3'b010;  // To L2
+                    outgoing_orders_buy[out_top_ptr_buy][order_width-4] <= 1'b0;         // Insert into end of price level FIFO
+                    outgoing_orders_buy[out_top_ptr_buy][order_width-5:0] <= candidate_buys[i];
                 end
                 else begin
-                    outgoing_orders_buy[i][order_width-1 -: 3] <= 3'b100;  // To CPU
-                    outgoing_orders_buy[i][order_width-4] <= 1'b0;         // don't care
-                    outgoing_orders_buy[i][order_width-5:0] <= new_buys[i];
+                    outgoing_orders_buy[out_top_ptr_buy][order_width-1 -: 3] <= 3'b100;  // To CPU
+                    outgoing_orders_buy[out_top_ptr_buy][order_width-4] <= 1'b0;         // don't care
+                    outgoing_orders_buy[out_top_ptr_buy][order_width-5:0] <= new_buys[i];
                 end
-                
-                // Sell
-                if(new_sells[i][price_bits+qty_bits-1 -: price_bits] == best_sell_price && 
-                top_sell_ptr < L2_capacity + num_orders_sell_added && top_sell_ptr > L1_capacity + num_orders_sell_added
-                && !new_candidate_sell[i]) begin
-                    outgoing_orders_sell[i][order_width-1 -: 3] <= 3'b001;  // To L2
-                    outgoing_orders_sell[i][order_width-4] <= 1'b0;         // Insert into end of FIFO
-                    outgoing_orders_sell[i][order_width-5:0] <= new_sells[i];
+                out_top_ptr_buy = out_top_ptr_buy + 1;
+                if(new_sells[i][price_bits+qty_bits-1 -: price_bits] == best_sell_price
+                && !new_candidate_sell[i] && out_top_ptr_sell > L1_capacity && top_sell_ptr < L2_capacity) begin
+                    outgoing_orders_sell[out_top_ptr_sell][order_width-1 -: 3] <= 3'b001;  // To L2
+                    outgoing_orders_sell[out_top_ptr_sell][order_width-4] <= 1'b0;         // Insert into end of FIFO
+                    outgoing_orders_sell[out_top_ptr_sell][order_width-5:0] <= new_sells[i];
                 end
                 else begin
-                    outgoing_orders_sell[i][order_width-1 -: 3] <= 3'b100;  // To CPU
-                    outgoing_orders_sell[i][order_width-4] <= 1'b0;         // don't care, has to go to back
-                    outgoing_orders_sell[i][order_width-5:0] <= new_sells[i];
+                    outgoing_orders_sell[out_top_ptr_sell][order_width-1 -: 3] <= 3'b100;  // To CPU
+                    outgoing_orders_sell[out_top_ptr_sell][order_width-4] <= 1'b0;         // don't care, has to go to back
+                    outgoing_orders_sell[out_top_ptr_sell][order_width-5:0] <= new_sells[i];
                 end
+                out_top_ptr_sell = out_top_ptr_sell + 1;
             end
-        end   
+        end 
     end
     
     // Generate grid of matching cores, populate with candidate buys/sells
