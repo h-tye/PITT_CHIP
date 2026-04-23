@@ -75,6 +75,8 @@ module MatchingEngine #(
     logic [$clog2(num_incoming_orders*2)-1:0] out_top_ptr_sell;
     wire [qty_bits-1:0] buy_qty_wire [num_incoming_orders*2][num_incoming_orders*2];
     wire [qty_bits-1:0] sell_qty_wire [num_incoming_orders*2][num_incoming_orders*2];
+    wire [qty_bits-1:0] input_buy_qty [num_incoming_orders*2][num_incoming_orders*2];
+    wire [qty_bits-1:0] input_sell_qty[num_incoming_orders*2][num_incoming_orders*2];
     
     
     typedef enum logic [3:0] {
@@ -299,18 +301,21 @@ module MatchingEngine #(
                     end
                 end
             end
-            if(residual_sell_qty[stage_num][num_incoming_orders*2-1] == 0) begin
+            if(input_sell_qty[stage_num][num_incoming_orders*2-1] == 0) begin
                 sells_filled[stage_num] = 1;
                 num_orders_filled_sell <= num_orders_filled_sell + 1;
                 new_orders_filled_sell <= new_orders_filled_sell + candidate_sells[stage_num][order_width];  // Marked new
             end
-            if(residual_buy_qty[num_incoming_orders*2-1][stage_num] == 0) begin
+            if(input_buy_qty[num_incoming_orders*2-1][stage_num] == 0) begin
                 buys_filled[stage_num] = 1;
                 num_orders_filled_buy <= num_orders_filled_buy + 1;
                 new_orders_filled_buy <= new_orders_filled_buy + candidate_buys[stage_num][order_width];
             end
-            if(residual_sell_qty[stage_num][num_incoming_orders*2-1] == candidate_sells[stage_num][qty_bits-1:0] && 
-                residual_buy_qty[num_incoming_orders*2-1][stage_num] == candidate_buys[stage_num][qty_bits-1:0]) begin
+            if(input_sell_qty[stage_num][num_incoming_orders*2-1] == candidate_sells[stage_num][qty_bits-1:0] && 
+                input_buy_qty[num_incoming_orders*2-1][stage_num] == candidate_buys[stage_num][qty_bits-1:0]) begin
+                // Update qty, has to be stage before b/c we only stop when no order is filled
+                candidate_buys[stage_num-1][qty_bits-1:0] <= residual_buy_qty[stage_num-1][stage_num-1];
+                candidate_sells[stage_num-1][qty_bits-1:0] <= residual_sell_qty[stage_num-1][stage_num-1];
                 done_eval <= 1;
             end
         end
@@ -390,8 +395,6 @@ module MatchingEngine #(
     end
     
     // Generate grid of matching cores, populate with candidate buys/sells
-    wire [qty_bits-1:0] input_buy_qty [num_incoming_orders*2][num_incoming_orders*2];
-    wire [qty_bits-1:0] input_sell_qty[num_incoming_orders*2][num_incoming_orders*2];
     genvar row, col;
     generate
         for (row = 0; row < num_incoming_orders*2; row++) begin : row_loop
