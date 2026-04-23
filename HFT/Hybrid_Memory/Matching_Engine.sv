@@ -311,12 +311,12 @@ module MatchingEngine #(
         else if(next_state == MATCH_DONE) begin
             candidate_buys[stage_num-1][qty_bits-1:0] <= residual_buy_qty[stage_num-1][stage_num-1];
             candidate_sells[stage_num-1][qty_bits-1:0] <= residual_sell_qty[stage_num-1][stage_num-1];
-            for(i = 0; i < num_incoming_orders*2-1; i++) begin
-                if(residual_sell_qty[i][stage_num-1] == 0 && candidate_sells[i] != 0) begin
+            for(i = 0; i < num_incoming_orders*2; i++) begin
+                if(residual_sell_qty[i][stage_num-1] == 0 && candidate_sells[i][qty_bits-1:0] != 0) begin
                     sells_filled[i] = 1;
                     num_orders_filled_sell = num_orders_filled_sell + 1;
                 end
-                if(residual_buy_qty[stage_num-1][i] == 0 && candidate_buys[i] != 0) begin
+                if(residual_buy_qty[stage_num-1][i] == 0 && candidate_buys[i][qty_bits-1:0] != 0) begin
                     buys_filled[i] = 1;
                     num_orders_filled_buy = num_orders_filled_buy + 1;
                 end
