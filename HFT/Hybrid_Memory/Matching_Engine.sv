@@ -69,8 +69,6 @@ module MatchingEngine #(
     logic done_eval;
     logic [$clog2(num_incoming_orders)-1:0] num_orders_filled_buy;
     logic [$clog2(num_incoming_orders)-1:0] num_orders_filled_sell;
-    logic [$clog2(num_incoming_orders)-1:0] new_orders_filled_buy;
-    logic [$clog2(num_incoming_orders)-1:0] new_orders_filled_sell;
     logic [$clog2(num_incoming_orders*2)-1:0] out_top_ptr_buy;
     logic [$clog2(num_incoming_orders*2)-1:0] out_top_ptr_sell;
     wire [qty_bits-1:0] buy_qty_wire [num_incoming_orders*2][num_incoming_orders*2];
@@ -86,6 +84,7 @@ module MatchingEngine #(
         LOAD3,
         LOAD4,
         MATCH,
+        MATCH_DONE,
         SEND1,
         SEND2,
         IDLE
@@ -133,12 +132,15 @@ module MatchingEngine #(
         end
         else if(state == MATCH) begin
             if(done_eval) begin
-                next_state = SEND1;
+                next_state = MATCH_DONE;
             end
             else begin
                 next_state = MATCH;
             end
             done = 0;
+        end
+        else if(state == MATCH_DONE) begin
+            next_state = SEND1;
         end
         else if(state == SEND1) begin
             next_state = SEND2;
@@ -175,8 +177,6 @@ module MatchingEngine #(
             sells_filled <= 0;
             num_orders_filled_buy <= 0;
             num_orders_filled_sell <= 0;
-            new_orders_filled_buy <= 0;
-            new_orders_filled_sell <= 0;
             num_orders_buy_added <= 0;
             num_orders_buy_removed <= 0;
             num_orders_sell_added <= 0;
@@ -301,22 +301,25 @@ module MatchingEngine #(
                     end
                 end
             end
-            if(input_sell_qty[stage_num][num_incoming_orders*2-1] == 0) begin
-                sells_filled[stage_num] = 1;
-                num_orders_filled_sell <= num_orders_filled_sell + 1;
-                new_orders_filled_sell <= new_orders_filled_sell + candidate_sells[stage_num][order_width];  // Marked new
-            end
-            if(input_buy_qty[num_incoming_orders*2-1][stage_num] == 0) begin
-                buys_filled[stage_num] = 1;
-                num_orders_filled_buy <= num_orders_filled_buy + 1;
-                new_orders_filled_buy <= new_orders_filled_buy + candidate_buys[stage_num][order_width];
-            end
-            if(input_sell_qty[stage_num][num_incoming_orders*2-1] == candidate_sells[stage_num][qty_bits-1:0] && 
-                input_buy_qty[num_incoming_orders*2-1][stage_num] == candidate_buys[stage_num][qty_bits-1:0]) begin
-                // Update qty, has to be stage before b/c we only stop when no order is filled
-                candidate_buys[stage_num-1][qty_bits-1:0] <= residual_buy_qty[stage_num-1][stage_num-1];
-                candidate_sells[stage_num-1][qty_bits-1:0] <= residual_sell_qty[stage_num-1][stage_num-1];
+            if(input_sell_qty[stage_num][num_incoming_orders*2-1] != 0 || 
+                input_buy_qty[num_incoming_orders*2-1][stage_num] != 0
+                || num_orders_filled_sell == num_incoming_orders*2-1 
+                || num_orders_filled_buy == num_incoming_orders*2-1) begin
                 done_eval <= 1;
+            end
+        end
+        else if(next_state == MATCH_DONE) begin
+            candidate_buys[stage_num-1][qty_bits-1:0] <= residual_buy_qty[stage_num-1][stage_num-1];
+            candidate_sells[stage_num-1][qty_bits-1:0] <= residual_sell_qty[stage_num-1][stage_num-1];
+            for(i = 0; i < num_incoming_orders*2-1; i++) begin
+                if(residual_sell_qty[i][stage_num-1] == 0) begin
+                    sells_filled[i] = 1;
+                    num_orders_filled_sell = num_orders_filled_sell + 1;
+                end
+                if(residual_buy_qty[stage_num-1][i] == 0) begin
+                    buys_filled[i] = 1;
+                    num_orders_filled_buy = num_orders_filled_buy + 1;
+                end
             end
         end
         else if(next_state == SEND1) begin
@@ -366,30 +369,32 @@ module MatchingEngine #(
         end  
         else if(next_state == SEND2) begin
             for(i = 0; i < num_incoming_orders; i++) begin
-                if(new_buys[i][price_bits+qty_bits-1 -: price_bits] == best_buy_price
+                if(buys_filled[i] == 0 && new_buys[i][price_bits+qty_bits-1 -: price_bits] == best_buy_price
                 && !new_candidate_buy[i] && out_top_ptr_buy > L1_capacity && top_buy_ptr < L2_capacity) begin
                     outgoing_orders_buy[out_top_ptr_buy][order_width-1 -: 3] <= 3'b010;  // To L2
                     outgoing_orders_buy[out_top_ptr_buy][order_width-4] <= 1'b0;         // Insert into end of price level FIFO
                     outgoing_orders_buy[out_top_ptr_buy][order_width-5:0] <= candidate_buys[i];
+                    out_top_ptr_buy = out_top_ptr_buy + 1;
                 end
-                else begin
+                else if(buys_filled[i] == 0) begin
                     outgoing_orders_buy[out_top_ptr_buy][order_width-1 -: 3] <= 3'b100;  // To CPU
                     outgoing_orders_buy[out_top_ptr_buy][order_width-4] <= 1'b0;         // don't care
                     outgoing_orders_buy[out_top_ptr_buy][order_width-5:0] <= new_buys[i];
+                    out_top_ptr_buy = out_top_ptr_buy + 1;
                 end
-                out_top_ptr_buy = out_top_ptr_buy + 1;
-                if(new_sells[i][price_bits+qty_bits-1 -: price_bits] == best_sell_price
+                if(sells_filled[i] == 0 && new_sells[i][price_bits+qty_bits-1 -: price_bits] == best_sell_price
                 && !new_candidate_sell[i] && out_top_ptr_sell > L1_capacity && top_sell_ptr < L2_capacity) begin
                     outgoing_orders_sell[out_top_ptr_sell][order_width-1 -: 3] <= 3'b001;  // To L2
                     outgoing_orders_sell[out_top_ptr_sell][order_width-4] <= 1'b0;         // Insert into end of FIFO
                     outgoing_orders_sell[out_top_ptr_sell][order_width-5:0] <= new_sells[i];
+                    out_top_ptr_sell = out_top_ptr_sell + 1;
                 end
-                else begin
+                else if(sells_filled[i] == 0) begin
                     outgoing_orders_sell[out_top_ptr_sell][order_width-1 -: 3] <= 3'b100;  // To CPU
                     outgoing_orders_sell[out_top_ptr_sell][order_width-4] <= 1'b0;         // don't care, has to go to back
                     outgoing_orders_sell[out_top_ptr_sell][order_width-5:0] <= new_sells[i];
+                    out_top_ptr_sell = out_top_ptr_sell + 1;
                 end
-                out_top_ptr_sell = out_top_ptr_sell + 1;
             end
         end 
     end
